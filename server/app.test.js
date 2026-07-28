@@ -52,3 +52,21 @@ test("returns a useful status for invalid, missing, and unavailable lookups", as
   assert.equal((await request(server, { waybillNumber: "NONE" })).status, 404);
   assert.equal((await request(server, { waybillNumber: "BROKEN" })).status, 502);
 });
+
+test("downloads a fixed xlsx export for a found waybill", async (t) => {
+  const server = await start({ async findByWaybill() { return { waybill_number: "MO10083334" }; } });
+  t.after(() => server.close());
+  const address = server.address();
+  const response = await new Promise((resolve, reject) => {
+    const req = http.request({ hostname: "127.0.0.1", port: address.port, path: "/api/exports/waybill", method: "POST", headers: { "content-type": "application/json" } }, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve({ status: res.statusCode, type: res.headers["content-type"], body: Buffer.concat(chunks) }));
+    });
+    req.on("error", reject);
+    req.end(JSON.stringify({ waybillNumber: "MO10083334" }));
+  });
+  assert.equal(response.status, 200);
+  assert.match(response.type, /spreadsheetml/);
+  assert.equal(response.body.subarray(0, 2).toString(), "PK");
+});

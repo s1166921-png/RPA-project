@@ -2,6 +2,8 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { lookupWaybill } = require("./lookup-service");
+const { buildExportRows } = require("./export-service");
+const { createXlsxExport } = require("./export-workbook");
 
 function sendJson(response, status, body) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -28,6 +30,25 @@ function createServer({ provider, staticRoot }) {
         return sendJson(response, status, result);
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
+      }
+    }
+
+    if (request.method === "POST" && request.url === "/api/exports/waybill") {
+      try {
+        const result = await lookupWaybill(await readJson(request), provider);
+        if (result.status !== "found") {
+          const status = { invalid_input: 400, not_found: 404, source_unavailable: 502 }[result.status];
+          return sendJson(response, status, result);
+        }
+        const file = await createXlsxExport(buildExportRows([result.shipment]));
+        response.writeHead(200, {
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "content-disposition": `attachment; filename="waybill-${result.shipment.waybillNumber}.xlsx"`,
+          "cache-control": "no-store"
+        });
+        return response.end(file);
+      } catch {
+        return sendJson(response, 502, { status: "source_unavailable" });
       }
     }
 
