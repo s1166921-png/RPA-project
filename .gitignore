@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+node_modules/
 
 # Test and runtime output
 coverage/
