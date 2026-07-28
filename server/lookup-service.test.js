@@ -30,6 +30,25 @@ test("returns a standardized shipment from the provider", async () => {
   assert.equal(result.shipment.queriedAt, "2026-07-28T08:00:00.000Z");
 });
 
+test("converts New Wisdom display fragments into plain text", async () => {
+  const result = await lookupWaybill({ waybillNumber: "MO10068327" }, {
+    async findByWaybill() {
+      return {
+        shipment_number: "MO10068327",
+        to_country: "德国<br/>38350",
+        parcel_count: '<strong><font style="color:green">4/4</font></strong>',
+        sell_charge_amount: '<span>1050.00CNY</span><span>运费 (15.00/KG)</span>',
+        last_tracking: "2026-04-02 14:57:22<br/>已交快递"
+      };
+    }
+  }, fixedNow);
+
+  assert.equal(result.shipment.country, "德国 38350");
+  assert.equal(result.shipment.pieces, "4/4");
+  assert.equal(result.shipment.receivable, "1050.00CNY运费 (15.00/KG)");
+  assert.equal(result.shipment.lastRoute, "2026-04-02 14:57:22 已交快递");
+});
+
 test("rejects an empty waybill before calling the provider", async () => {
   const result = await lookupWaybill({ waybillNumber: "   " }, {
     async findByWaybill() {

@@ -1,6 +1,15 @@
+function plainText(value) {
+  return String(value)
+    .replace(/<br\s*\/?\s*>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function value(row, ...keys) {
   for (const key of keys) {
-    if (row[key] !== undefined && row[key] !== null) return String(row[key]);
+    if (row[key] !== undefined && row[key] !== null) return plainText(row[key]);
   }
   return "";
 }
