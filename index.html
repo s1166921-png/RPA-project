@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>客户自助智能查阅系统</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="login-view" id="loginView">
+        <div class="login-copy">
+          <p class="eyebrow">Workflow Query Portal</p>
+          <h1>客户自助智能查阅系统</h1>
+          <p>客户只需要说想查什么，系统会匹配固定工作流，按权限查数据、校验字段并生成可复制结果。</p>
+        </div>
+        <form class="login-card" id="loginForm">
+          <h2>登录</h2>
+          <label>账号<input id="username" value="yangzhicheng" autocomplete="username" /></label>
+          <label>密码<input id="password" type="password" value="123789" autocomplete="current-password" /></label>
+          <button type="submit">进入系统</button>
+          <p id="loginHint">演示账号已预填</p>
+        </form>
+      </section>
+
+      <section class="portal hidden" id="portalView">
+        <aside class="side-nav">
+          <div class="brand">
+            <span>RPA</span>
+            <div>
+              <strong id="customerName"></strong>
+              <small id="tenantLabel"></small>
+            </div>
+          </div>
+          <button class="nav-item active" data-view="query" type="button">智能查询</button>
+          <button class="nav-item" data-view="history" type="button">运行记录</button>
+          <button class="nav-item" data-view="security" type="button">安全隔离</button>
+          <button class="logout" id="logoutButton" type="button">退出</button>
+        </aside>
+
+        <section class="workspace">
+          <section class="view active" id="query">
+            <header class="hero">
+              <div>
+                <p class="eyebrow">客户入口</p>
+                <h1 id="heroTitle">今天想查什么？</h1>
+                <p>输入单号、账单、计费重等需求，系统会自动选择受控工作流。AI 只负责理解需求，关键数据来自工作流结果。</p>
+              </div>
+              <div class="trust-box">
+                <span>租户隔离</span>
+                <span>只读 RPA</span>
+                <span>结果可追溯</span>
+              </div>
+            </header>
+
+            <form class="smart-query" id="smartQueryForm">
+              <input id="smartQuery" placeholder="例如：帮我查未发计费重 / 查 MOY-10001 物流" />
+              <button type="submit">查询</button>
+            </form>
+
+            <div class="quick-actions">
+              <button id="quickBillingWeight" type="button">未发计费重确认</button>
+              <button data-query="查 MOY-10001 物流" type="button">物流轨迹</button>
+              <button data-query="查 2026-06 账单" type="button">账单费用</button>
+            </div>
+
+            <section class="result-panel" id="workflowResult">
+              <p class="empty">请选择快捷工作流，或直接输入查询需求。</p>
+            </section>
+          </section>
+
+          <section class="view" id="history">
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">审计与追溯</p>
+                  <h2>运行记录</h2>
+                </div>
+                <span class="pill">workflow_runs / source_snapshots / audit_logs</span>
+              </div>
+              <div id="runHistory" class="table-wrap"></div>
+            </div>
+          </section>
+
+          <section class="view" id="security">
+            <div class="panel" id="securityPanel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">安全边界</p>
+                  <h2>客户数据保密与隔离</h2>
+                </div>
+                <span class="pill">默认拒绝越权</span>
+              </div>
+              <div class="security-grid">
+                <article><strong>客户不能直接传 customer_id</strong><p>所有查询范围从登录 token 中的 tenant_id 推导，前端传入的客户编号不可信。</p></article>
+                <article><strong>AI 只能调用受权限保护的工作流工具</strong><p>AI 不接触全量数据库，也不能绕过工作流和权限层。</p></article>
+                <article><strong>自动化默认只读</strong><p>发送企业微信、添加标识、移除标识必须走人工确认或审批开关。</p></article>
+              </div>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

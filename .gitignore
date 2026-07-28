@@ -1,0 +1,14 @@
+# Local credentials and generated files
+.env
+.env.*
+!.env.example
+
+# Test and runtime output
+coverage/
+playwright-report/
+test-results/
+*.log
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
