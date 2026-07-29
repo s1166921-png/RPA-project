@@ -5,15 +5,15 @@ function feeBranch(receivable) {
 }
 
 function buildExportRows(shipments) {
-  return [headers, ...shipments.map((item) => [
+  return [[...headers, "\u6765\u6e90\u5feb\u7167ID"], ...shipments.map((item) => [
     item.waybillNumber, item.fbaNumber, item.service, item.country, item.recipient, item.pieces,
     item.actualWeight, item.volumeWeight, item.chargeWeight, item.receivable, feeBranch(item.receivable),
-    item.customsMode, item.source, item.queriedAt
+    item.customsMode, item.source, item.queriedAt, item.sourceSnapshotId || ""
   ])];
 }
 
 function buildBatchExportRows(results) {
-  return [[...headers, "\u67e5\u8be2\u72b6\u6001", "\u5931\u8d25\u539f\u56e0"], ...results.map((result) => {
+  return [[...headers, "\u6765\u6e90\u5feb\u7167ID", "\u67e5\u8be2\u72b6\u6001", "\u5931\u8d25\u539f\u56e0"], ...results.map((result) => {
     if (result.status === "found") {
       return [...buildExportRows([result.shipment])[1], "\u5df2\u627e\u5230", ""];
     }
@@ -21,7 +21,7 @@ function buildBatchExportRows(results) {
     const failure = result.status === "not_found"
       ? ["\u672a\u627e\u5230", "\u672a\u627e\u5230\u8be5\u8fd0\u5355"]
       : ["\u6570\u636e\u6e90\u4e0d\u53ef\u7528", "\u65b0\u667a\u6167\u6570\u636e\u6e90\u6682\u65f6\u4e0d\u53ef\u7528"];
-    return [result.waybillNumber || "", ...Array(headers.length - 1).fill(""), ...failure];
+    return [result.waybillNumber || "", ...Array(headers.length).fill(""), ...failure];
   })];
 }
 

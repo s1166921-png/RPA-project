@@ -54,6 +54,26 @@ function protectResult(result, user, auth) {
   return { status: "not_found", waybillNumber: result.shipment.waybillNumber };
 }
 
+function addSourceSnapshots(results, user, sourceSnapshots, queryType) {
+  return results.map((result) => {
+    if (result.status !== "found" || !result.shipment || !sourceSnapshots) return result;
+    const snapshot = sourceSnapshots.create({
+      tenantId: user?.tenantId || "public",
+      source: result.shipment.source,
+      queryType
+    });
+    return { ...result, shipment: { ...result.shipment, sourceSnapshotId: snapshot.id } };
+  });
+}
+
+function prepareWaybillResults(results, waybillNumbers, user, auth, sourceSnapshots, queryType) {
+  const protectedResults = results.map((item) => protectResult(item, user, auth));
+  return addRequestedWaybillNumbers(
+    addSourceSnapshots(protectedResults, user, sourceSnapshots, queryType),
+    waybillNumbers
+  );
+}
+
 function recordRun(runStore, user, workflowId, status, startedAt, inputCount) {
   runStore?.record({
     workflowId,
@@ -101,7 +121,7 @@ function scheduleMonthlyBillingExport({ task, request, user, tenantMappings, inv
   });
 }
 
-function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null, portalUsers = null }) {
+function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null, portalUsers = null, sourceSnapshots = null }) {
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
@@ -203,7 +223,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
 
     if (request.method === "POST" && request.url === "/api/shipments/lookup") {
       try {
-        const result = protectResult(await lookupWaybill(await readJson(request), provider), user, auth);
+        const result = addSourceSnapshots([protectResult(await lookupWaybill(await readJson(request), provider), user, auth)], user, sourceSnapshots, "waybill_lookup")[0];
         const status = { found: 200, invalid_input: 400, not_found: 404, source_unavailable: 502 }[result.status];
         return sendJson(response, status, result);
       } catch {
@@ -224,7 +244,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         recordRun(runStore, user, "waybill_lookup", result.status, startedAt, parsed.waybillNumbers.length);
         return sendJson(response, 200, {
           status: result.status,
-          results: addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers)
+          results: prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "waybill_lookup")
         });
       } catch {
         return sendJson(response, 400, { status: "invalid_input", results: [] });
@@ -242,7 +262,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
           return sendJson(response, 400, result);
         }
         recordRun(runStore, user, "billing_weight_confirmation", "completed", startedAt, parsed.waybillNumbers.length);
-        return sendJson(response, 200, runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers)));
+        return sendJson(response, 200, runBillingWeightWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "billing_weight_confirmation")));
       } catch {
         return sendJson(response, 400, { status: "invalid_input", items: [] });
       }
@@ -259,7 +279,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
           return sendJson(response, 400, result);
         }
         recordRun(runStore, user, "shipment_tracking", "completed", startedAt, parsed.waybillNumbers.length);
-        const protectedResults = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
+        const protectedResults = prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "shipment_tracking");
         return sendJson(response, 200, runShipmentTrackingWorkflow(protectedResults));
       } catch {
         return sendJson(response, 400, { status: "invalid_input", items: [] });
@@ -277,7 +297,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
           return sendJson(response, 400, result);
         }
         recordRun(runStore, user, "billing_query", "completed", startedAt, parsed.waybillNumbers.length);
-        const protectedResults = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
+        const protectedResults = prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "billing_query");
         return sendJson(response, 200, runBillingQueryWorkflow(protectedResults));
       } catch {
         return sendJson(response, 400, { status: "invalid_input", items: [] });
@@ -312,7 +332,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
           return sendJson(response, 400, result);
         }
         recordRun(runStore, user, "weight_validation", "completed", startedAt, parsed.waybillNumbers.length);
-        const protectedResults = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
+        const protectedResults = prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "weight_validation");
         return sendJson(response, 200, runWeightValidationWorkflow(protectedResults));
       } catch {
         return sendJson(response, 400, { status: "invalid_input", items: [] });
@@ -328,32 +348,32 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
             const parsed = parseWaybillNumbers(waybillNumbers);
             const result = await lookupWaybills(waybillNumbers, provider);
             return result.status === "completed"
-              ? { ...result, results: addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers) }
+              ? { ...result, results: prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_lookup") }
               : result;
           },
           billing: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
             const result = await lookupWaybills(waybillNumbers, provider);
             if (result.status !== "completed") return result;
-            return runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
+            return runBillingWeightWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_billing_weight"));
           },
           tracking: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
             const result = await lookupWaybills(waybillNumbers, provider);
             if (result.status !== "completed") return result;
-            return runShipmentTrackingWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
+            return runShipmentTrackingWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_tracking"));
           },
           billingQuery: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
             const result = await lookupWaybills(waybillNumbers, provider);
             if (result.status !== "completed") return result;
-            return runBillingQueryWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
+            return runBillingQueryWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_billing_query"));
           },
           weightValidation: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
             const result = await lookupWaybills(waybillNumbers, provider);
             if (result.status !== "completed") return result;
-            return runWeightValidationWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
+            return runWeightValidationWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_weight_validation"));
           },
           monthlyBilling: async (month) => {
             const monthly = await queryMonthlyBilling({ month }, user, tenantMappings, invoiceProvider);
@@ -371,7 +391,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
 
     if (request.method === "POST" && request.url === "/api/exports/waybill") {
       try {
-        const result = protectResult(await lookupWaybill(await readJson(request), provider), user, auth);
+        const result = addSourceSnapshots([protectResult(await lookupWaybill(await readJson(request), provider), user, auth)], user, sourceSnapshots, "waybill_export")[0];
         if (result.status !== "found") {
           const status = { invalid_input: 400, not_found: 404, source_unavailable: 502 }[result.status];
           return sendJson(response, status, result);
@@ -399,7 +419,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         const parsed = parseWaybillNumbers(body.waybillNumbers);
         const result = await lookupWaybills(body.waybillNumbers, provider);
         if (result.status !== "completed") return sendJson(response, 400, result);
-        body.results = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
+        body.results = prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "batch_waybill_export");
       } else if (requireAuth) {
         return sendJson(response, 404, { status: "not_found" });
       }

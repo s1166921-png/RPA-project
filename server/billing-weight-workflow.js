@@ -35,6 +35,7 @@ function runBillingWeightWorkflow(results) {
         branch: failed ? "unavailable" : isNoFee(item.shipment.receivable) ? "no_fee" : "with_fee",
         source: item.shipment?.source || "",
         queriedAt: item.shipment?.queriedAt || "",
+        sourceSnapshotId: item.shipment?.sourceSnapshotId || "",
         message: failed ? "" : buildMessage(item.shipment)
       };
     })

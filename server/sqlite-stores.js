@@ -48,6 +48,13 @@ function createSqliteStores(options = {}) {
       enabled INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS source_snapshots (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      query_type TEXT NOT NULL,
+      queried_at INTEGER NOT NULL
+    );
   `);
 
   const mappingFromRow = (row) => row && ({
@@ -88,6 +95,8 @@ function createSqliteStores(options = {}) {
       enabled = excluded.enabled,
       updated_at = excluded.updated_at
   `);
+  const createSourceSnapshot = db.prepare("INSERT INTO source_snapshots (id, tenant_id, source, query_type, queried_at) VALUES (?, ?, ?, ?, ?)");
+  const listSourceSnapshots = db.prepare("SELECT id, source, query_type, queried_at FROM source_snapshots WHERE tenant_id = ? ORDER BY queried_at DESC LIMIT ?");
   const maxEntries = Number(options.maxEntries || 200);
   const newId = options.newId || crypto.randomUUID;
 
@@ -185,6 +194,23 @@ function createSqliteStores(options = {}) {
         const enabled = user.enabled !== false;
         savePortalUser.run(username, passwordHash, tenantId, role, JSON.stringify(allowedCustomerCodes), enabled ? 1 : 0, now());
         return { username, passwordHash, tenantId, role, allowedCustomerCodes, enabled };
+      }
+    },
+    sourceSnapshots: {
+      create({ tenantId, source, queryType }) {
+        const id = String(newId());
+        const normalizedTenantId = String(tenantId || "public").trim() || "public";
+        const queriedAt = now();
+        createSourceSnapshot.run(id, normalizedTenantId, String(source || "unknown"), String(queryType || "unknown"), queriedAt);
+        return { id, source: String(source || "unknown"), queryType: String(queryType || "unknown"), queriedAt };
+      },
+      list(tenantId) {
+        return listSourceSnapshots.all(String(tenantId || "public"), maxEntries).map((row) => ({
+          id: row.id,
+          source: row.source,
+          queryType: row.query_type,
+          queriedAt: row.queried_at
+        }));
       }
     },
     close() { db.close(); }

@@ -12,7 +12,8 @@ function runShipmentTrackingWorkflow(results) {
         lastRoute: item.status === "found" ? shipment.lastRoute : "",
         routeNodes: item.status === "found" ? shipment.routeNodes || [] : [],
         source: item.status === "found" ? shipment.source || "" : "",
-        queriedAt: item.status === "found" ? shipment.queriedAt || "" : ""
+        queriedAt: item.status === "found" ? shipment.queriedAt || "" : "",
+        sourceSnapshotId: item.status === "found" ? shipment.sourceSnapshotId || "" : ""
       };
     })
   };

@@ -518,7 +518,7 @@ function renderAssistantResult(payload) {
         details.textContent = `应收：${item.amount} ${item.currency}；运费单价：${item.freightRate || ""}`;
         card.append(details);
         const raw = document.createElement("small");
-        raw.textContent = `来源字段：${item.rawReceivable}；来源：${item.source}；查询时间：${item.queriedAt}`;
+        raw.textContent = `来源字段：${item.rawReceivable}；来源：${item.source}；查询时间：${item.queriedAt}；快照：${item.sourceSnapshotId || "-"}`;
         card.append(raw);
       } else {
         const reason = document.createElement("p");
@@ -583,7 +583,7 @@ function renderAssistantResult(payload) {
           card.append(nodes);
         }
         const source = document.createElement("small");
-        source.textContent = `来源：${item.source}；查询时间：${item.queriedAt}`;
+        source.textContent = `来源：${item.source}；查询时间：${item.queriedAt}；快照：${item.sourceSnapshotId || "-"}`;
         card.append(source);
       } else {
         const reason = document.createElement("p");

@@ -13,9 +13,9 @@ async function run() {
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.locator(".workflow-definition").nth(4).waitFor();
-    assert.equal(await page.locator(".workflow-definition").count(), 5);
+    assert.equal(await page.locator(".workflow-definition").count(), 6);
     assert.match(await page.locator("#workflowCatalog").innerText(), /物流轨迹查询/);
-    console.log(JSON.stringify({ workflowCatalogUserPath: "passed", fixedWorkflows: 5 }));
+    console.log(JSON.stringify({ workflowCatalogUserPath: "passed", fixedWorkflows: 6 }));
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

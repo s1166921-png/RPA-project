@@ -78,3 +78,18 @@ test("stores portal users with password hashes hidden from administrative listin
     stores.close();
   }
 });
+
+test("stores source snapshot metadata per tenant without business payloads", () => {
+  const stores = createSqliteStores({ filename: ":memory:", now: () => 1234, newId: () => "snapshot-1" });
+  try {
+    assert.deepEqual(stores.sourceSnapshots.create({ tenantId: "tenant-a", source: "New Wisdom", queryType: "shipment_tracking" }), {
+      id: "snapshot-1", source: "New Wisdom", queryType: "shipment_tracking", queriedAt: 1234
+    });
+    assert.deepEqual(stores.sourceSnapshots.list("tenant-a"), [{
+      id: "snapshot-1", source: "New Wisdom", queryType: "shipment_tracking", queriedAt: 1234
+    }]);
+    assert.deepEqual(stores.sourceSnapshots.list("tenant-b"), []);
+  } finally {
+    stores.close();
+  }
+});

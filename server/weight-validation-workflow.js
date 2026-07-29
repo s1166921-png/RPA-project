@@ -32,7 +32,8 @@ function runWeightValidationWorkflow(results) {
         chargeWeight,
         validationStatus,
         source: item.status === "found" ? shipment.source || "" : "",
-        queriedAt: item.status === "found" ? shipment.queriedAt || "" : ""
+        queriedAt: item.status === "found" ? shipment.queriedAt || "" : "",
+        sourceSnapshotId: item.status === "found" ? shipment.sourceSnapshotId || "" : ""
       };
     })
   };

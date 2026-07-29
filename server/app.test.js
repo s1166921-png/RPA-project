@@ -326,6 +326,28 @@ test("runs a batch lookup and retains found and missing statuses", async (t) => 
   assert.deepEqual(response.body.results.map((result) => result.status), ["found", "not_found"]);
 });
 
+test("adds tenant-scoped source snapshot IDs only to authorized found results", async (t) => {
+  const stores = createSqliteStores({ filename: ":memory:", newId: () => "snapshot-a" });
+  const auth = authForTests();
+  const server = await start({
+    async findByWaybill(value) {
+      return { waybill_number: value, customer_code: value === "MO-A" ? "CUST-A" : "CUST-B" };
+    }
+  }, { auth, requireAuth: true, sourceSnapshots: stores.sourceSnapshots });
+  t.after(() => { server.close(); stores.close(); });
+
+  const login = await request(server, { username: "client-a", password: "pass-a" }, "/api/auth/login");
+  const headers = { authorization: `Bearer ${login.body.token}` };
+  const response = await request(server, { waybillNumbers: ["MO-A", "MO-B"] }, "/api/shipments/batch-lookup", headers);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.results[0].shipment.sourceSnapshotId, "snapshot-a");
+  assert.equal(response.body.results[1].status, "not_found");
+  assert.equal(Object.hasOwn(response.body.results[1], "sourceSnapshotId"), false);
+  assert.deepEqual(stores.sourceSnapshots.list("tenant-a").map(({ source, queryType }) => ({ source, queryType })), [{
+    source: "新智慧运单接口", queryType: "waybill_lookup"
+  }]);
+});
+
 test("runs the read-only billing weight confirmation workflow", async (t) => {
   const server = await start({
     async findByWaybill(value) {
