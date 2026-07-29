@@ -221,6 +221,24 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       }
     }
 
+    const portalUserMatch = request.url.match(/^\/api\/operations\/users\/([^/?]+)$/);
+    if (request.method === "PATCH" && portalUserMatch) {
+      try {
+        if (!portalUsers) return sendJson(response, 503, { status: "configuration_unavailable" });
+        const username = decodeURIComponent(portalUserMatch[1]);
+        const existing = portalUsers.get(username);
+        const body = await readJson(request);
+        if (!existing || existing.role !== "customer" || typeof body.enabled !== "boolean") {
+          return sendJson(response, 400, { status: "invalid_input" });
+        }
+        const stored = portalUsers.upsert({ ...existing, enabled: body.enabled });
+        const { passwordHash, ...publicUser } = stored;
+        return sendJson(response, 200, { status: "updated", user: publicUser });
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input" });
+      }
+    }
+
     const mappingMatch = request.url.match(/^\/api\/operations\/tenant-mappings\/([^/?]+)$/);
     if (request.method === "PUT" && mappingMatch) {
       try {

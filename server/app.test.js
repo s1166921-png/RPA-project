@@ -185,9 +185,17 @@ test("allows only an administrator to manage local tenant mappings", async (t) =
   const customerLogin = await request(server, { username: "client-new", password: "client-password" }, "/api/auth/login");
   assert.equal(customerLogin.status, 200);
 
+  const disabled = await request(server, { enabled: false }, "/api/operations/users/client-new", adminHeaders, "PATCH");
+  assert.equal(disabled.status, 200);
+  assert.equal(disabled.body.user.enabled, false);
+  const disabledLogin = await request(server, { username: "client-new", password: "client-password" }, "/api/auth/login");
+  assert.equal(disabledLogin.status, 401);
+
   const existingCustomerLogin = await request(server, { username: "customer", password: "customer-pass" }, "/api/auth/login");
   const denied = await get(server, "/api/operations/tenant-mappings", { authorization: `Bearer ${existingCustomerLogin.body.token}` });
   assert.equal(denied.status, 403);
+  const customerPatch = await request(server, { enabled: false }, "/api/operations/users/client-new", { authorization: `Bearer ${existingCustomerLogin.body.token}` }, "PATCH");
+  assert.equal(customerPatch.status, 403);
 });
 
 test("queries only mapped monthly invoices and omits source user identifiers", async (t) => {

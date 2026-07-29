@@ -261,7 +261,29 @@ async function loadOperations() {
     users.users.forEach((user) => {
       const item = document.createElement("article");
       item.className = "portal-user-item";
-      item.textContent = `${user.username} · ${user.tenantId} · ${user.enabled ? "启用" : "停用"}`;
+      const detail = document.createElement("span");
+      detail.textContent = `${user.username} · ${user.tenantId} · ${user.enabled ? "启用" : "停用"}`;
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.textContent = user.enabled ? "停用" : "启用";
+      toggle.setAttribute("aria-label", `${user.enabled ? "Disable" : "Enable"} ${user.username}`);
+      toggle.addEventListener("click", async () => {
+        toggle.disabled = true;
+        try {
+          const response = await apiFetch(`/api/operations/users/${encodeURIComponent(user.username)}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ enabled: !user.enabled })
+          });
+          if (!response.ok) throw new Error("portal user update failed");
+          await loadOperations();
+        } catch {
+          portalUserResult.textContent = "客户账号状态更新失败，请稍后重试。";
+        } finally {
+          toggle.disabled = false;
+        }
+      });
+      item.append(detail, toggle);
       portalUserResult.append(item);
     });
   } catch {

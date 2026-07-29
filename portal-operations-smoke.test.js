@@ -60,7 +60,18 @@ async function run() {
     await login(newCustomerPage, "new-customer", "new-customer-pass");
     await newCustomerPage.waitForFunction(() => document.querySelector("#loginForm").hidden, null, { timeout: 10_000 });
     assert.equal(await newCustomerPage.locator("#operationsPanel").evaluate((panel) => panel.hidden), true);
-    console.log(JSON.stringify({ operationsAdminUserPath: "passed", mappingSaved: "passed", customerOperationsHidden: "passed" }));
+
+    const disableCustomer = adminPage.getByRole("button", { name: "Disable new-customer" });
+    assert.equal(await disableCustomer.count(), 1);
+    await disableCustomer.click();
+    await adminPage.waitForFunction(() => document.querySelector('[aria-label="Enable new-customer"]'), null, { timeout: 10_000 });
+
+    const disabledCustomerPage = await browser.newPage();
+    await disabledCustomerPage.goto(`http://127.0.0.1:${server.address().port}`);
+    await login(disabledCustomerPage, "new-customer", "new-customer-pass");
+    await disabledCustomerPage.waitForFunction(() => document.querySelector("#loginStatus").innerText.length > 0, null, { timeout: 10_000 });
+    assert.equal(await disabledCustomerPage.locator("#loginForm").evaluate((form) => form.hidden), false);
+    console.log(JSON.stringify({ operationsAdminUserPath: "passed", mappingSaved: "passed", customerOperationsHidden: "passed", customerAccountDisabled: "passed" }));
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
