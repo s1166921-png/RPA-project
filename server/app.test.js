@@ -112,6 +112,13 @@ test("returns tenant-scoped workflow run history without waybill details", async
   assert.equal(Object.hasOwn(response.body.runs[0], "waybillNumbers"), false);
 });
 
+test("exposes a credential-free liveness health check", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } });
+  t.after(() => server.close());
+  const response = await get(server, "/api/health");
+  assert.deepEqual(response, { status: 200, body: { status: "ok" } });
+});
+
 test("serves the customer-safe workflow catalog", async (t) => {
   const server = await start({ async findByWaybill() { return null; } });
   t.after(() => server.close());

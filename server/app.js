@@ -163,6 +163,10 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
     };
   }
   return http.createServer(async (request, response) => {
+    if (request.method === "GET" && request.url === "/api/health") {
+      return sendJson(response, 200, { status: "ok" });
+    }
+
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
         if (!auth) return sendJson(response, 503, { status: "auth_unavailable" });
