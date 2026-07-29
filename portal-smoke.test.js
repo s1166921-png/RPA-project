@@ -45,6 +45,15 @@ async function run() {
     await page.locator("#downloadBatchExport").click();
     assert.match((await download).suggestedFilename(), /waybill-batch-\d+\.xlsx/);
 
+    await page.locator("#assistantMessage").fill("帮我查 MO10083334");
+    await page.locator("#assistantForm button").click();
+    await page.waitForFunction(() => document.querySelector("#assistantResult").innerText.includes("查询完成"));
+    assert.equal(await page.locator('[data-waybill="MO10083334"]').count(), 1);
+
+    await page.locator("#assistantMessage").fill("帮我查物流");
+    await page.locator("#assistantForm button").click();
+    await page.waitForFunction(() => document.querySelector("#assistantResult").innerText.includes("请提供一个或多个运单号"));
+
     await page.locator("#waybillNumbers").fill("");
     await page.locator("#lookupForm button").click();
     await expectText(page, "#lookupResult", "\u8bf7\u8f93\u5165\u8fd0\u5355\u53f7");

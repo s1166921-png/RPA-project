@@ -6,6 +6,7 @@ const { lookupWaybills, parseWaybillNumbers } = require("./batch-lookup-service"
 const { buildExportRows, buildBatchExportRows } = require("./export-service");
 const { createXlsxExport } = require("./export-workbook");
 const { runBillingWeightWorkflow } = require("./billing-weight-workflow");
+const { handleAssistantMessage } = require("./assistant-service");
 
 const MAX_BATCH_RESULTS = 50;
 
@@ -73,6 +74,30 @@ function createServer({ provider, staticRoot }) {
         return sendJson(response, 200, runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results, parsed.waybillNumbers)));
       } catch {
         return sendJson(response, 400, { status: "invalid_input", items: [] });
+      }
+    }
+
+    if (request.method === "POST" && request.url === "/api/assistant/message") {
+      try {
+        const body = await readJson(request);
+        const assistant = await handleAssistantMessage(body.message, {
+          lookup: async (waybillNumbers) => {
+            const parsed = parseWaybillNumbers(waybillNumbers);
+            const result = await lookupWaybills(waybillNumbers, provider);
+            return result.status === "completed"
+              ? { ...result, results: addRequestedWaybillNumbers(result.results, parsed.waybillNumbers) }
+              : result;
+          },
+          billing: async (waybillNumbers) => {
+            const parsed = parseWaybillNumbers(waybillNumbers);
+            const result = await lookupWaybills(waybillNumbers, provider);
+            if (result.status !== "completed") return result;
+            return runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results, parsed.waybillNumbers));
+          }
+        });
+        return sendJson(response, 200, assistant);
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input", reply: "暂时无法处理这个请求，请稍后重试。" });
       }
     }
 

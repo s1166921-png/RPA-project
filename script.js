@@ -1,6 +1,9 @@
 const form = document.querySelector("#lookupForm");
 const input = document.querySelector("#waybillNumbers");
 const result = document.querySelector("#lookupResult");
+const assistantForm = document.querySelector("#assistantForm");
+const assistantMessage = document.querySelector("#assistantMessage");
+const assistantResult = document.querySelector("#assistantResult");
 let currentBatch = [];
 let currentInput = "";
 
@@ -141,6 +144,60 @@ async function downloadBatchExport() {
     setMessage("批量导出失败，请稍后重试。", "error");
   }
 }
+
+function renderAssistantResult(payload) {
+  assistantResult.innerHTML = "";
+  const reply = document.createElement("p");
+  reply.textContent = payload.reply || "已完成查询。";
+  assistantResult.append(reply);
+
+  if (Array.isArray(payload.results)) {
+    currentInput = (payload.waybillNumbers || []).join("\n");
+    currentBatch = payload.results;
+    renderBatch(currentBatch);
+  }
+
+  if (Array.isArray(payload.items)) {
+    const panel = document.createElement("section");
+    panel.className = "workflow-message";
+    const heading = document.createElement("h3");
+    heading.textContent = `${payload.name}（只读结果）`;
+    panel.append(heading);
+    payload.items.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "workflow-message-item";
+      const title = document.createElement("strong");
+      title.textContent = `${item.waybillNumber} · ${item.branch}`;
+      const message = document.createElement("pre");
+      message.textContent = item.message || displayReason(item.status);
+      card.append(title, message);
+      panel.append(card);
+    });
+    assistantResult.append(panel);
+  }
+}
+
+assistantForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = assistantMessage.value.trim();
+  if (!message) {
+    assistantResult.textContent = "请描述要查询的内容。";
+    return;
+  }
+  assistantResult.textContent = "正在理解你的需求并调用只读工作流…";
+  try {
+    const response = await fetch("/api/assistant/message", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error("assistant request failed");
+    renderAssistantResult(payload);
+  } catch {
+    assistantResult.textContent = "助手暂时不可用，请稍后重试。";
+  }
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

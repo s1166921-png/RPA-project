@@ -24,6 +24,18 @@
         </form>
       </section>
 
+      <section class="assistant-panel" aria-labelledby="assistantTitle">
+        <p class="eyebrow">AI 查询助手</p>
+        <h2 id="assistantTitle">直接描述你要查的内容</h2>
+        <form id="assistantForm" class="assistant-form">
+          <label for="assistantMessage">查询需求</label>
+          <textarea id="assistantMessage" rows="3" autocomplete="off" placeholder="例如：帮我查 MO10068327 和 MO10084025 的物流"></textarea>
+          <p class="input-hint">助手只会调用已配置的只读查询工作流，不会编造金额、重量或物流状态。</p>
+          <button type="submit">发送查询</button>
+        </form>
+        <div id="assistantResult" class="assistant-result" aria-live="polite"></div>
+      </section>
+
       <section id="lookupResult" class="result-panel" aria-live="polite">
         <p class="empty">请输入运单号开始查询。</p>
       </section>

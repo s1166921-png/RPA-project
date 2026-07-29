@@ -133,3 +133,23 @@ textarea {
 .workflow-message h3 { margin: 0; }
 .workflow-message-item { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
 .workflow-message-item pre { margin: 10px 0 0; white-space: pre-wrap; font: inherit; line-height: 1.65; }
+
+.assistant-panel {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 20px;
+}
+
+.assistant-panel h2 { margin: 0; font-size: 20px; }
+.assistant-form { display: grid; gap: 10px; margin-top: 16px; }
+.assistant-form label { font-weight: 700; }
+.assistant-form textarea { min-height: 76px; }
+.assistant-result { margin-top: 14px; color: var(--muted); line-height: 1.6; }
+.assistant-result p { margin: 0; }
+
+@media (max-width: 640px) {
+  .assistant-panel { padding: 18px; }
+  .assistant-form button { width: 100%; }
+}

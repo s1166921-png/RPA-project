@@ -83,6 +83,16 @@ test("runs the read-only billing weight confirmation workflow", async (t) => {
   assert.match(response.body.items[0].message, /运费：7.60\/KG/);
 });
 
+test("runs the controlled assistant tool without inventing data", async (t) => {
+  const server = await start({ async findByWaybill(value) { return { waybill_number: value, sell_charge_amount: "0.00CNY" }; } });
+  t.after(() => server.close());
+  const response = await request(server, { message: "帮我查 MO10083334" }, "/api/assistant/message");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.tool, "batchLookup");
+  assert.equal(response.body.results[0].status, "found");
+  assert.match(response.body.reply, /查询完成/);
+});
+
 test("keeps later batch lookup results after a source failure", async (t) => {
   const server = await start({
     async findByWaybill(value) {
