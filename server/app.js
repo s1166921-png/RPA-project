@@ -50,7 +50,17 @@ function protectResult(result, user, auth) {
   return { status: "not_found", waybillNumber: result.shipment.waybillNumber };
 }
 
-function createServer({ provider, staticRoot, auth = null, requireAuth = false }) {
+function recordRun(runStore, user, workflowId, status, startedAt, inputCount) {
+  runStore?.record({
+    workflowId,
+    tenantId: user?.tenantId || "public",
+    status,
+    durationMs: Date.now() - startedAt,
+    inputCount
+  });
+}
+
+function createServer({ provider, staticRoot, auth = null, requireAuth = false, runStore = null }) {
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
@@ -75,6 +85,10 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
       if (!user) return sendJson(response, 401, { status: "authentication_required" });
     }
 
+    if (request.method === "GET" && request.url === "/api/workflow/runs") {
+      return sendJson(response, 200, { status: "ok", runs: runStore?.list(user?.tenantId || "public") || [] });
+    }
+
     if (request.method === "POST" && request.url === "/api/shipments/lookup") {
       try {
         const result = protectResult(await lookupWaybill(await readJson(request), provider), user, auth);
@@ -86,11 +100,16 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
     }
 
     if (request.method === "POST" && request.url === "/api/shipments/batch-lookup") {
+      const startedAt = Date.now();
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
         const result = await lookupWaybills(body.waybillNumbers, provider);
-        if (result.status !== "completed") return sendJson(response, 400, result);
+        if (result.status !== "completed") {
+          recordRun(runStore, user, "waybill_lookup", result.status, startedAt, 0);
+          return sendJson(response, 400, result);
+        }
+        recordRun(runStore, user, "waybill_lookup", result.status, startedAt, parsed.waybillNumbers.length);
         return sendJson(response, 200, {
           status: result.status,
           results: addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers)
@@ -101,11 +120,16 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
     }
 
     if (request.method === "POST" && request.url === "/api/workflows/billing-weight-confirmation") {
+      const startedAt = Date.now();
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
         const result = await lookupWaybills(body.waybillNumbers, provider);
-        if (result.status !== "completed") return sendJson(response, 400, result);
+        if (result.status !== "completed") {
+          recordRun(runStore, user, "billing_weight_confirmation", result.status, startedAt, 0);
+          return sendJson(response, 400, result);
+        }
+        recordRun(runStore, user, "billing_weight_confirmation", "completed", startedAt, parsed.waybillNumbers.length);
         return sendJson(response, 200, runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers)));
       } catch {
         return sendJson(response, 400, { status: "invalid_input", items: [] });
@@ -113,11 +137,16 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
     }
 
     if (request.method === "POST" && request.url === "/api/workflows/shipment-tracking") {
+      const startedAt = Date.now();
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
         const result = await lookupWaybills(body.waybillNumbers, provider);
-        if (result.status !== "completed") return sendJson(response, 400, result);
+        if (result.status !== "completed") {
+          recordRun(runStore, user, "shipment_tracking", result.status, startedAt, 0);
+          return sendJson(response, 400, result);
+        }
+        recordRun(runStore, user, "shipment_tracking", "completed", startedAt, parsed.waybillNumbers.length);
         const protectedResults = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
         return sendJson(response, 200, runShipmentTrackingWorkflow(protectedResults));
       } catch {
@@ -126,11 +155,16 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
     }
 
     if (request.method === "POST" && request.url === "/api/workflows/billing-query") {
+      const startedAt = Date.now();
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
         const result = await lookupWaybills(body.waybillNumbers, provider);
-        if (result.status !== "completed") return sendJson(response, 400, result);
+        if (result.status !== "completed") {
+          recordRun(runStore, user, "billing_query", result.status, startedAt, 0);
+          return sendJson(response, 400, result);
+        }
+        recordRun(runStore, user, "billing_query", "completed", startedAt, parsed.waybillNumbers.length);
         const protectedResults = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
         return sendJson(response, 200, runBillingQueryWorkflow(protectedResults));
       } catch {
@@ -139,6 +173,7 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
     }
 
     if (request.method === "POST" && request.url === "/api/assistant/message") {
+      const startedAt = Date.now();
       try {
         const body = await readJson(request);
         const assistant = await handleAssistantMessage(body.message, {
@@ -168,6 +203,7 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
             return runBillingQueryWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
           }
         });
+        recordRun(runStore, user, assistant.tool || "assistant", "completed", startedAt, assistant.waybillNumbers?.length || 0);
         return sendJson(response, 200, assistant);
       } catch {
         return sendJson(response, 400, { status: "invalid_input", reply: "暂时无法处理这个请求，请稍后重试。" });

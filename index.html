@@ -53,6 +53,16 @@
       <section id="lookupResult" class="result-panel" aria-live="polite">
         <p class="empty">请输入运单号开始查询。</p>
       </section>
+      <section class="history-panel" aria-labelledby="historyTitle">
+        <div class="history-heading">
+          <div>
+            <p class="eyebrow">查询记录</p>
+            <h2 id="historyTitle">近期工作流执行</h2>
+          </div>
+          <button id="historyButton" type="button">查看记录</button>
+        </div>
+        <div id="historyResult" class="history-result" aria-live="polite"></div>
+      </section>
     </main>
     <script src="./script.js"></script>
   </body>

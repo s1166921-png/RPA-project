@@ -4,6 +4,7 @@ const test = require("node:test");
 
 const { createServer } = require("./app");
 const { createAuthService, hashPassword } = require("./auth-service");
+const { createWorkflowRunStore } = require("./workflow-run-store");
 
 async function start(provider, options = {}) {
   const server = createServer({ provider, staticRoot: __dirname + "/..", ...options });
@@ -60,6 +61,30 @@ async function download(server, body, pathname, extraHeaders = {}) {
     req.end(JSON.stringify(body));
   });
 }
+
+async function get(server, pathname, extraHeaders = {}) {
+  const address = server.address();
+  return new Promise((resolve, reject) => {
+    const req = http.request({ hostname: "127.0.0.1", port: address.port, path: pathname, method: "GET", headers: extraHeaders }, (res) => {
+      let text = "";
+      res.on("data", (chunk) => { text += chunk; });
+      res.on("end", () => resolve({ status: res.statusCode, body: text ? JSON.parse(text) : null }));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+test("returns tenant-scoped workflow run history without waybill details", async (t) => {
+  const runStore = createWorkflowRunStore();
+  const server = await start({ async findByWaybill(value) { return { waybill_number: value }; } }, { runStore });
+  t.after(() => server.close());
+  await request(server, { waybillNumbers: ["MO1"] }, "/api/shipments/batch-lookup");
+  const response = await get(server, "/api/workflow/runs");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.runs[0].workflowId, "waybill_lookup");
+  assert.equal(Object.hasOwn(response.body.runs[0], "waybillNumbers"), false);
+});
 
 test("requires login and masks another tenant's shipment", async (t) => {
   const auth = authForTests();

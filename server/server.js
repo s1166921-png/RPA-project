@@ -5,6 +5,7 @@ const { createNewWisdomProvider } = require("./providers/new-wisdom-provider");
 const { createCachedProvider } = require("./provider-cache");
 const { createAuthService, loadUsers } = require("./auth-service");
 const { createAuditedProvider } = require("./audit-log");
+const { createWorkflowRunStore } = require("./workflow-run-store");
 const { getListenOptions } = require("./server-config");
 
 const { port, host } = getListenOptions();
@@ -24,11 +25,12 @@ const provider = createCachedProvider(auditedProvider, {
   ttlMs: Number(process.env.LOOKUP_CACHE_TTL_MS || 30_000),
   maxEntries: Number(process.env.LOOKUP_CACHE_MAX_ENTRIES || 1_000)
 });
+const runStore = createWorkflowRunStore();
 const auth = requireAuth
   ? createAuthService({
       secret: process.env.AUTH_TOKEN_SECRET,
       users: loadUsers(process.env.PORTAL_USERS_JSON || "[]")
     })
   : null;
-const server = createServer({ provider, auth, requireAuth, staticRoot: path.resolve(__dirname, "..") });
+const server = createServer({ provider, auth, requireAuth, runStore, staticRoot: path.resolve(__dirname, "..") });
 server.listen(port, host, () => console.log(`Waybill portal: http://${host}:${port}`));

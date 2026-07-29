@@ -12,6 +12,8 @@ const loginStatus = document.querySelector("#loginStatus");
 const logoutButton = document.querySelector("#logoutButton");
 let currentBatch = [];
 let currentInput = "";
+const historyButton = document.querySelector("#historyButton");
+const historyResult = document.querySelector("#historyResult");
 let authToken = sessionStorage.getItem("portalAuthToken") || "";
 
 function apiFetch(url, options = {}) {
@@ -71,6 +73,29 @@ logoutButton?.addEventListener("click", () => {
   loginForm.hidden = false;
   logoutButton.hidden = true;
   loginStatus.textContent = "已退出登录。";
+});
+
+historyButton?.addEventListener("click", async () => {
+  historyResult.textContent = "正在读取查询记录…";
+  try {
+    const response = await apiFetch("/api/workflow/runs");
+    if (response.status === 401) return showLoginRequired();
+    if (!response.ok) throw new Error("history request failed");
+    const payload = await response.json();
+    historyResult.innerHTML = "";
+    if (!payload.runs.length) {
+      historyResult.textContent = "暂无查询记录。";
+      return;
+    }
+    payload.runs.forEach((run) => {
+      const item = document.createElement("article");
+      item.className = "history-item";
+      item.textContent = `${run.workflowId} · ${run.status} · ${run.inputCount} 个单号 · ${run.durationMs}ms`;
+      historyResult.append(item);
+    });
+  } catch {
+    historyResult.textContent = "查询记录暂时不可用，请稍后重试。";
+  }
 });
 
 function setMessage(message, className = "") {

@@ -152,6 +152,11 @@ textarea {
 .tracking-item small { display: block; margin-top: 10px; color: var(--muted); }
 .billing-item p { margin: 8px 0 0; }
 .billing-item small { display: block; margin-top: 10px; color: var(--muted); overflow-wrap: anywhere; }
+.history-panel { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
+.history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.history-heading h2 { margin: 0; font-size: 20px; }
+.history-result { display: grid; gap: 8px; margin-top: 14px; color: var(--muted); }
+.history-item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 
 .assistant-panel {
   margin-top: 18px;
