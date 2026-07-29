@@ -4,6 +4,7 @@ const { createSampleProvider } = require("./providers/sample-provider");
 const { createNewWisdomProvider } = require("./providers/new-wisdom-provider");
 const { createCachedProvider } = require("./provider-cache");
 const { createAuthService, loadUsers } = require("./auth-service");
+const { createAuditedProvider } = require("./audit-log");
 const { getListenOptions } = require("./server-config");
 
 const { port, host } = getListenOptions();
@@ -16,7 +17,10 @@ const sourceProvider = useNewWisdom
       browserFactory: async () => (await require("playwright")).chromium.launch({ headless: true })
     })
   : createSampleProvider();
-const provider = createCachedProvider(sourceProvider, {
+const auditedProvider = createAuditedProvider(sourceProvider, {
+  sink: process.env.AUDIT_LOG === "console" ? (event) => console.log(JSON.stringify(event)) : undefined
+});
+const provider = createCachedProvider(auditedProvider, {
   ttlMs: Number(process.env.LOOKUP_CACHE_TTL_MS || 30_000),
   maxEntries: Number(process.env.LOOKUP_CACHE_MAX_ENTRIES || 1_000)
 });
