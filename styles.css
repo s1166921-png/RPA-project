@@ -150,6 +150,8 @@ textarea {
 .tracking-nodes { margin: 10px 0 0; padding-left: 20px; color: var(--muted); }
 .tracking-nodes li { padding: 3px 0; }
 .tracking-item small { display: block; margin-top: 10px; color: var(--muted); }
+.billing-item p { margin: 8px 0 0; }
+.billing-item small { display: block; margin-top: 10px; color: var(--muted); overflow-wrap: anywhere; }
 
 .assistant-panel {
   margin-top: 18px;

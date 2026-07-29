@@ -12,7 +12,8 @@ function interpretAssistantMessage(message) {
   return {
     intent: /计费重|收费重|未发/.test(text)
       ? "billing_weight_confirmation"
-      : /物流|轨迹|状态/.test(text) ? "shipment_tracking" : "waybill_lookup",
+      : /物流|轨迹|状态/.test(text) ? "shipment_tracking"
+        : /账单|费用|应收|收费明细/.test(text) ? "billing_query" : "waybill_lookup",
     waybillNumbers
   };
 }
@@ -40,6 +41,15 @@ async function handleAssistantMessage(message, tools) {
       tool: "shipmentTracking",
       ...tracking,
       reply: "已调用物流轨迹工作流，状态和节点以系统查询结果为准。"
+    };
+  }
+  if (interpretation.intent === "billing_query") {
+    const billing = await tools.billingQuery(interpretation.waybillNumbers);
+    return {
+      ...interpretation,
+      tool: "billingQuery",
+      ...billing,
+      reply: "已调用费用明细工作流，金额和费用字段以系统查询结果为准。"
     };
   }
   const lookup = await tools.lookup(interpretation.waybillNumbers);

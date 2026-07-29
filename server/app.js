@@ -7,6 +7,7 @@ const { buildExportRows, buildBatchExportRows } = require("./export-service");
 const { createXlsxExport } = require("./export-workbook");
 const { runBillingWeightWorkflow } = require("./billing-weight-workflow");
 const { runShipmentTrackingWorkflow } = require("./shipment-tracking-workflow");
+const { runBillingQueryWorkflow } = require("./billing-query-workflow");
 const { handleAssistantMessage } = require("./assistant-service");
 
 const MAX_BATCH_RESULTS = 50;
@@ -124,6 +125,19 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
       }
     }
 
+    if (request.method === "POST" && request.url === "/api/workflows/billing-query") {
+      try {
+        const body = await readJson(request);
+        const parsed = parseWaybillNumbers(body.waybillNumbers);
+        const result = await lookupWaybills(body.waybillNumbers, provider);
+        if (result.status !== "completed") return sendJson(response, 400, result);
+        const protectedResults = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
+        return sendJson(response, 200, runBillingQueryWorkflow(protectedResults));
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input", items: [] });
+      }
+    }
+
     if (request.method === "POST" && request.url === "/api/assistant/message") {
       try {
         const body = await readJson(request);
@@ -146,6 +160,12 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
             const result = await lookupWaybills(waybillNumbers, provider);
             if (result.status !== "completed") return result;
             return runShipmentTrackingWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
+          },
+          billingQuery: async (waybillNumbers) => {
+            const parsed = parseWaybillNumbers(waybillNumbers);
+            const result = await lookupWaybills(waybillNumbers, provider);
+            if (result.status !== "completed") return result;
+            return runBillingQueryWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
           }
         });
         return sendJson(response, 200, assistant);

@@ -223,6 +223,38 @@ function renderAssistantResult(payload) {
     renderBatch(currentBatch);
   }
 
+  if (payload.workflowId === "billing_query" && Array.isArray(payload.items)) {
+    const panel = document.createElement("section");
+    panel.className = "workflow-message billing-message";
+    const heading = document.createElement("h3");
+    heading.textContent = `${payload.name}（只读结果）`;
+    panel.append(heading);
+    payload.items.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "workflow-message-item billing-item";
+      card.dataset.waybill = item.waybillNumber;
+      const title = document.createElement("strong");
+      title.textContent = `${item.waybillNumber} · ${displayStatus(item.status)}`;
+      card.append(title);
+      if (item.status === "found") {
+        const details = document.createElement("p");
+        details.textContent = `应收：${item.amount} ${item.currency}；运费单价：${item.freightRate || ""}`;
+        card.append(details);
+        const raw = document.createElement("small");
+        raw.textContent = `来源字段：${item.rawReceivable}；来源：${item.source}；查询时间：${item.queriedAt}`;
+        card.append(raw);
+      } else {
+        const reason = document.createElement("p");
+        reason.className = "batch-reason";
+        reason.textContent = displayReason(item.status);
+        card.append(reason);
+      }
+      panel.append(card);
+    });
+    assistantResult.append(panel);
+    return;
+  }
+
   if (payload.workflowId === "shipment_tracking" && Array.isArray(payload.items)) {
     const panel = document.createElement("section");
     panel.className = "workflow-message tracking-message";

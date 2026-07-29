@@ -132,6 +132,20 @@ test("runs the read-only shipment tracking workflow", async (t) => {
   assert.equal(response.body.items[0].routeNodes[0].location, "仓库");
 });
 
+test("runs the read-only billing query workflow", async (t) => {
+  const server = await start({
+    async findByWaybill(value) {
+      return { shipment_number: value, sell_charge_amount: "826.00CNY 运费 (7.60/KG)" };
+    }
+  });
+  t.after(() => server.close());
+  const response = await request(server, { waybillNumbers: ["MO10082215"] }, "/api/workflows/billing-query");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.workflowId, "billing_query");
+  assert.equal(response.body.items[0].amount, "826.00");
+  assert.equal(response.body.items[0].freightRate, "7.60/KG");
+});
+
 test("runs the controlled assistant tool without inventing data", async (t) => {
   const server = await start({ async findByWaybill(value) { return { waybill_number: value, sell_charge_amount: "0.00CNY" }; } });
   t.after(() => server.close());
