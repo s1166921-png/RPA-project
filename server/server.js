@@ -2,8 +2,9 @@ const path = require("node:path");
 const { createServer } = require("./app");
 const { createSampleProvider } = require("./providers/sample-provider");
 const { createNewWisdomProvider } = require("./providers/new-wisdom-provider");
+const { getListenOptions } = require("./server-config");
 
-const port = Number(process.env.PORT || 3000);
+const { port, host } = getListenOptions();
 const useNewWisdom = process.env.LOOKUP_PROVIDER === "new-wisdom";
 const provider = useNewWisdom
   ? createNewWisdomProvider({
@@ -13,4 +14,4 @@ const provider = useNewWisdom
     })
   : createSampleProvider();
 const server = createServer({ provider, staticRoot: path.resolve(__dirname, "..") });
-server.listen(port, () => console.log(`Waybill portal: http://localhost:${port}`));
+server.listen(port, host, () => console.log(`Waybill portal: http://${host}:${port}`));
