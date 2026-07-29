@@ -86,6 +86,16 @@ test("returns tenant-scoped workflow run history without waybill details", async
   assert.equal(Object.hasOwn(response.body.runs[0], "waybillNumbers"), false);
 });
 
+test("serves the customer-safe workflow catalog", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } });
+  t.after(() => server.close());
+  const response = await get(server, "/api/workflows/definitions");
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.workflows.map((workflow) => workflow.workflowId), [
+    "waybill_lookup", "shipment_tracking", "billing_query", "billing_weight_confirmation"
+  ]);
+});
+
 test("requires login and masks another tenant's shipment", async (t) => {
   const auth = authForTests();
   const server = await start({

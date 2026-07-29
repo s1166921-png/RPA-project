@@ -64,6 +64,13 @@ button:hover { filter: brightness(0.95); }
 
 .lookup-panel { padding: 28px; }
 
+.workflow-catalog { margin-bottom: 18px; }
+.workflow-catalog h2 { margin: 0; font-size: 20px; }
+.workflow-definition-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.workflow-definition { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--panel); }
+.workflow-definition p { margin: 7px 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.workflow-definition small { color: var(--green); }
+
 .eyebrow { margin: 0 0 8px; }
 
 .lookup-panel h1 { margin: 0; font-size: 28px; line-height: 1.3; }
@@ -120,6 +127,7 @@ textarea {
   .lookup-panel, .result-panel { padding: 18px; }
   .lookup-panel h1 { font-size: 24px; }
   .lookup-form button, #downloadBatchExport { width: 100%; }
+  .workflow-definition-list { grid-template-columns: 1fr; }
 }
 
 .workflow-message {

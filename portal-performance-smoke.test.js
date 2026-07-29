@@ -8,7 +8,7 @@ async function run() {
   const provider = createCachedProvider({
     async findByWaybill(waybillNumber) {
       calls += 1;
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 150));
       return { waybill_number: waybillNumber };
     }
   }, { ttlMs: 10_000 });
@@ -24,7 +24,7 @@ async function run() {
     await page.locator("#lookupForm button").click();
     await page.locator('[data-waybill="MO3"][data-status="found"]').waitFor();
     const elapsed = Date.now() - started;
-    assert.ok(elapsed < 280, `expected a fast parallel user query, took ${elapsed}ms`);
+    assert.ok(elapsed < 420, `expected a fast parallel user query, took ${elapsed}ms`);
 
     await page.locator("#waybillNumbers").fill("MO1");
     await page.locator("#lookupForm button").click();

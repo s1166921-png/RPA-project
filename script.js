@@ -14,6 +14,7 @@ let currentBatch = [];
 let currentInput = "";
 const historyButton = document.querySelector("#historyButton");
 const historyResult = document.querySelector("#historyResult");
+const workflowCatalog = document.querySelector("#workflowCatalog");
 let authToken = sessionStorage.getItem("portalAuthToken") || "";
 
 function apiFetch(url, options = {}) {
@@ -44,6 +45,31 @@ async function initializeAuth() {
 }
 
 initializeAuth();
+
+async function loadWorkflowCatalog() {
+  try {
+    const response = await fetch("/api/workflows/definitions");
+    if (!response.ok) return;
+    const payload = await response.json();
+    workflowCatalog.innerHTML = "";
+    payload.workflows.forEach((workflow) => {
+      const item = document.createElement("article");
+      item.className = "workflow-definition";
+      const title = document.createElement("strong");
+      title.textContent = workflow.name;
+      const description = document.createElement("p");
+      description.textContent = workflow.description;
+      const mode = document.createElement("small");
+      mode.textContent = workflow.readOnly ? "只读工作流" : "需审批";
+      item.append(title, description, mode);
+      workflowCatalog.append(item);
+    });
+  } catch {
+    workflowCatalog.textContent = "工作流目录暂时不可用。";
+  }
+}
+
+loadWorkflowCatalog();
 
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

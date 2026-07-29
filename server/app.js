@@ -8,6 +8,7 @@ const { createXlsxExport } = require("./export-workbook");
 const { runBillingWeightWorkflow } = require("./billing-weight-workflow");
 const { runShipmentTrackingWorkflow } = require("./shipment-tracking-workflow");
 const { runBillingQueryWorkflow } = require("./billing-query-workflow");
+const { listWorkflowDefinitions } = require("./workflow-definitions");
 const { handleAssistantMessage } = require("./assistant-service");
 
 const MAX_BATCH_RESULTS = 50;
@@ -87,6 +88,10 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false, 
 
     if (request.method === "GET" && request.url === "/api/workflow/runs") {
       return sendJson(response, 200, { status: "ok", runs: runStore?.list(user?.tenantId || "public") || [] });
+    }
+
+    if (request.method === "GET" && request.url === "/api/workflows/definitions") {
+      return sendJson(response, 200, { status: "ok", workflows: listWorkflowDefinitions() });
     }
 
     if (request.method === "POST" && request.url === "/api/shipments/lookup") {
