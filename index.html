@@ -56,6 +56,17 @@
         <div id="assistantResult" class="assistant-result" aria-live="polite"></div>
       </section>
 
+      <section class="monthly-billing-panel" aria-labelledby="monthlyBillingTitle">
+        <p class="eyebrow">月度账单</p>
+        <h2 id="monthlyBillingTitle">按月份查看账单</h2>
+        <form id="monthlyBillingForm" class="monthly-billing-form">
+          <label for="monthlyBillingMonth">账单月份</label>
+          <input id="monthlyBillingMonth" type="month" required />
+          <button type="submit">查询账单</button>
+        </form>
+        <div id="monthlyBillingResult" class="monthly-billing-result" aria-live="polite"></div>
+      </section>
+
       <section id="lookupResult" class="result-panel" aria-live="polite">
         <p class="empty">请输入运单号开始查询。</p>
       </section>

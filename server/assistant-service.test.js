@@ -30,6 +30,19 @@ test("asks for a waybill instead of querying when the parameter is missing", () 
   assert.deepEqual(interpretAssistantMessage("帮我查一下物流"), { intent: "need_waybill", waybillNumbers: [] });
 });
 
+test("routes a month-qualified bill request to the monthly billing workflow", async () => {
+  const result = await handleAssistantMessage("\u67e5\u8be2 2026-07 \u7684\u6708\u8d26\u5355", {
+    monthlyBilling: async (month) => ({ workflowId: "monthly_billing_query", month, items: [], totals: [] })
+  });
+  assert.equal(result.intent, "monthly_billing_query");
+  assert.equal(result.month, "2026-07");
+  assert.equal(result.tool, "monthlyBillingQuery");
+});
+
+test("asks for a month before running a monthly billing query", () => {
+  assert.deepEqual(interpretAssistantMessage("\u67e5\u6708\u8d26\u5355"), { intent: "need_month", waybillNumbers: [] });
+});
+
 test("returns structured tool results and does not invent a business answer", async () => {
   const result = await handleAssistantMessage("查 MO10068327", {
     lookup: async (numbers) => ({ status: "completed", results: numbers.map((waybillNumber) => ({ waybillNumber, status: "not_found" })) }),

@@ -22,6 +22,9 @@ const tenantMappingForm = document.querySelector("#tenantMappingForm");
 const mappingTenantId = document.querySelector("#mappingTenantId");
 const mappingCustomerCodes = document.querySelector("#mappingCustomerCodes");
 const mappingInvoiceUserIds = document.querySelector("#mappingInvoiceUserIds");
+const monthlyBillingForm = document.querySelector("#monthlyBillingForm");
+const monthlyBillingMonth = document.querySelector("#monthlyBillingMonth");
+const monthlyBillingResult = document.querySelector("#monthlyBillingResult");
 let authToken = sessionStorage.getItem("portalAuthToken") || "";
 let currentUser = null;
 
@@ -353,6 +356,21 @@ function renderAssistantResult(payload) {
     renderBatch(currentBatch);
   }
 
+  if (payload.workflowId === "monthly_billing_query") {
+    if (payload.status === "completed") {
+      monthlyBillingMonth.value = payload.month || "";
+      renderMonthlyBilling(payload);
+      const summary = document.createElement("p");
+      summary.textContent = `${payload.month} 账单已查询完成，共 ${payload.items?.length || 0} 条。`;
+      assistantResult.append(summary);
+    } else {
+      const error = document.createElement("p");
+      error.textContent = billingRequestMessage(payload.status);
+      assistantResult.append(error);
+    }
+    return;
+  }
+
   if (payload.workflowId === "billing_query" && Array.isArray(payload.items)) {
     const panel = document.createElement("section");
     panel.className = "workflow-message billing-message";
@@ -469,6 +487,113 @@ function renderAssistantResult(payload) {
     assistantResult.append(panel);
   }
 }
+
+function billingRequestMessage(status) {
+  return {
+    configuration_required: "当前账户尚未配置账单查询范围，请联系运营人员。",
+    source_unavailable: "账单数据源暂时不可用，请稍后再试。",
+    invalid_input: "请输入正确的账单月份。"
+  }[status] || "账单查询失败，请稍后再试。";
+}
+
+function renderMonthlyBilling(payload) {
+  monthlyBillingResult.innerHTML = "";
+  const heading = document.createElement("div");
+  heading.className = "monthly-billing-heading";
+  const title = document.createElement("h3");
+  title.textContent = `${payload.month} 账单`;
+  heading.append(title);
+
+  const totals = document.createElement("div");
+  totals.className = "monthly-billing-totals";
+  (payload.totals || []).forEach((total) => {
+    const totalItem = document.createElement("p");
+    totalItem.textContent = `${total.currency}: 应收 ${total.totalAmount}，已付 ${total.paidAmount}，未付 ${total.remainingAmount}`;
+    totals.append(totalItem);
+  });
+  heading.append(totals);
+
+  const exportButton = document.createElement("button");
+  exportButton.type = "button";
+  exportButton.textContent = "下载账单 Excel";
+  exportButton.addEventListener("click", () => downloadMonthlyBilling(payload.month));
+  heading.append(exportButton);
+  monthlyBillingResult.append(heading);
+
+  if (!payload.items?.length) {
+    const empty = document.createElement("p");
+    empty.className = "input-hint";
+    empty.textContent = "该月份暂无账单。";
+    monthlyBillingResult.append(empty);
+    return;
+  }
+
+  const list = document.createElement("div");
+  list.className = "monthly-billing-list";
+  payload.items.forEach((invoice) => {
+    const item = document.createElement("article");
+    item.className = "monthly-billing-item";
+    item.dataset.invoice = invoice.invoiceNumber;
+    const title = document.createElement("strong");
+    title.textContent = invoice.invoiceNumber || "-";
+    const details = document.createElement("p");
+    details.textContent = `${invoice.invoiceDate || "-"} · ${invoice.currency || "-"} · 应收 ${invoice.totalAmount} · 未付 ${invoice.remainingAmount}`;
+    const source = document.createElement("small");
+    source.textContent = `状态：${invoice.status || "-"}；来源：${invoice.source || "-"}；查询时间：${invoice.queriedAt}`;
+    item.append(title, details, source);
+    list.append(item);
+  });
+  monthlyBillingResult.append(list);
+}
+
+async function downloadMonthlyBilling(month) {
+  try {
+    const response = await apiFetch("/api/exports/monthly-billing", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ month })
+    });
+    if (response.status === 401) return showLoginRequired();
+    if (!response.ok) {
+      const payload = await response.json();
+      monthlyBillingResult.textContent = billingRequestMessage(payload.status);
+      return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const disposition = response.headers.get("content-disposition") || "";
+    const filename = disposition.match(/filename="?([^";]+)/)?.[1] || `monthly-billing-${month}.xlsx`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    monthlyBillingResult.textContent = "账单导出失败，请稍后再试。";
+  }
+}
+
+monthlyBillingForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const month = monthlyBillingMonth.value;
+  if (!month) return;
+  monthlyBillingResult.textContent = "正在查询账单…";
+  try {
+    const response = await apiFetch("/api/workflows/monthly-billing-query", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ month })
+    });
+    if (response.status === 401) return showLoginRequired();
+    const payload = await response.json();
+    if (!response.ok) {
+      monthlyBillingResult.textContent = billingRequestMessage(payload.status);
+      return;
+    }
+    renderMonthlyBilling(payload);
+  } catch {
+    monthlyBillingResult.textContent = "账单查询失败，请稍后再试。";
+  }
+});
 
 assistantForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

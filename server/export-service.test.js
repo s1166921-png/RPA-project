@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { buildExportRows, buildBatchExportRows } = require("./export-service");
+const { buildExportRows, buildBatchExportRows, buildMonthlyBillingExportRows } = require("./export-service");
 
 test("builds the fixed billing-weight export columns in workflow order", () => {
   const rows = buildExportRows([{
@@ -52,4 +52,17 @@ test("builds batch export rows for found and missing waybills", () => {
   assert.deepEqual(rows[1].slice(-2), ["\u5df2\u627e\u5230", ""]);
   assert.deepEqual(rows[2], ["MISSING-1", ...Array(13).fill(""), "\u672a\u627e\u5230", "\u672a\u627e\u5230\u8be5\u8fd0\u5355"]);
   assert.deepEqual(rows[3], ["UNAVAILABLE-1", ...Array(13).fill(""), "\u6570\u636e\u6e90\u4e0d\u53ef\u7528", "\u65b0\u667a\u6167\u6570\u636e\u6e90\u6682\u65f6\u4e0d\u53ef\u7528"]);
+});
+
+test("builds fixed monthly bill export columns without internal user identifiers", () => {
+  const rows = buildMonthlyBillingExportRows({
+    month: "2026-07",
+    items: [{
+      invoiceNumber: "INV-001", invoiceDate: "2026-07-02", currency: "CNY", totalAmount: "12.00",
+      paidAmount: "2.00", remainingAmount: "10.00", status: "unpaid", source: "New Wisdom", queriedAt: "2026-07-29T00:00:00.000Z"
+    }]
+  });
+
+  assert.deepEqual(rows[0], ["\u8d26\u5355\u6708\u4efd", "\u8d26\u5355\u53f7", "\u8d26\u5355\u65e5\u671f", "\u5e01\u79cd", "\u5e94\u6536", "\u5df2\u4ed8", "\u672a\u4ed8", "\u72b6\u6001", "\u6570\u636e\u6765\u6e90", "\u67e5\u8be2\u65f6\u95f4"]);
+  assert.deepEqual(rows[1], ["2026-07", "INV-001", "2026-07-02", "CNY", "12.00", "2.00", "10.00", "unpaid", "New Wisdom", "2026-07-29T00:00:00.000Z"]);
 });

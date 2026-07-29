@@ -3,11 +3,12 @@ const http = require("node:http");
 const path = require("node:path");
 const { lookupWaybill } = require("./lookup-service");
 const { lookupWaybills, parseWaybillNumbers } = require("./batch-lookup-service");
-const { buildExportRows, buildBatchExportRows } = require("./export-service");
+const { buildExportRows, buildBatchExportRows, buildMonthlyBillingExportRows } = require("./export-service");
 const { createXlsxExport } = require("./export-workbook");
 const { runBillingWeightWorkflow } = require("./billing-weight-workflow");
 const { runShipmentTrackingWorkflow } = require("./shipment-tracking-workflow");
 const { runBillingQueryWorkflow } = require("./billing-query-workflow");
+const { parseBillingMonth, runMonthlyBillingWorkflow } = require("./monthly-billing-workflow");
 const { listWorkflowDefinitions } = require("./workflow-definitions");
 const { runWeightValidationWorkflow } = require("./weight-validation-workflow");
 const { handleAssistantMessage } = require("./assistant-service");
@@ -62,7 +63,28 @@ function recordRun(runStore, user, workflowId, status, startedAt, inputCount) {
   });
 }
 
-function createServer({ provider, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null }) {
+async function queryMonthlyBilling(body, user, tenantMappings, invoiceProvider) {
+  const range = parseBillingMonth(body.month);
+  const tenantId = user?.tenantId || "public";
+  const mapping = tenantMappings?.get(tenantId);
+  if (!mapping?.invoiceUserIds.length) return { status: "configuration_required" };
+  if (!invoiceProvider?.findByMonth) return { status: "source_unavailable" };
+  try {
+    const invoices = await invoiceProvider.findByMonth({
+      month: range.month,
+      start: range.start,
+      end: range.end,
+      invoiceUserIds: mapping.invoiceUserIds
+    });
+    const allowedIds = new Set(mapping.invoiceUserIds.map(String));
+    const scopedInvoices = (Array.isArray(invoices) ? invoices : []).filter((invoice) => allowedIds.has(String(invoice.invoiceUserId)));
+    return { status: "completed", result: runMonthlyBillingWorkflow({ month: range.month, invoices: scopedInvoices }) };
+  } catch {
+    return { status: "source_unavailable" };
+  }
+}
+
+function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null }) {
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
@@ -212,6 +234,23 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false, 
       }
     }
 
+    if (request.method === "POST" && request.url === "/api/workflows/monthly-billing-query") {
+      const startedAt = Date.now();
+      try {
+        const body = await readJson(request);
+        const monthly = await queryMonthlyBilling(body, user, tenantMappings, invoiceProvider);
+        if (monthly.status !== "completed") {
+          recordRun(runStore, user, "monthly_billing_query", monthly.status, startedAt, 0);
+          return sendJson(response, monthly.status === "configuration_required" ? 422 : 503, { status: monthly.status, workflowId: "monthly_billing_query" });
+        }
+        recordRun(runStore, user, "monthly_billing_query", "completed", startedAt, monthly.result.items.length);
+        return sendJson(response, 200, monthly.result);
+      } catch {
+        recordRun(runStore, user, "monthly_billing_query", "invalid_input", startedAt, 0);
+        return sendJson(response, 400, { status: "invalid_input", workflowId: "monthly_billing_query" });
+      }
+    }
+
     if (request.method === "POST" && request.url === "/api/workflows/weight-validation") {
       const startedAt = Date.now();
       try {
@@ -265,6 +304,12 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false, 
             const result = await lookupWaybills(waybillNumbers, provider);
             if (result.status !== "completed") return result;
             return runWeightValidationWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
+          },
+          monthlyBilling: async (month) => {
+            const monthly = await queryMonthlyBilling({ month }, user, tenantMappings, invoiceProvider);
+            return monthly.status === "completed"
+              ? monthly.result
+              : { status: monthly.status, workflowId: "monthly_billing_query", items: [], totals: [] };
           }
         });
         recordRun(runStore, user, assistant.tool || "assistant", "completed", startedAt, assistant.waybillNumbers?.length || 0);
@@ -324,6 +369,28 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false, 
         return response.end(file);
       } catch {
         return sendJson(response, 502, { status: "source_unavailable" });
+      }
+    }
+
+    if (request.method === "POST" && request.url === "/api/exports/monthly-billing") {
+      const startedAt = Date.now();
+      try {
+        const monthly = await queryMonthlyBilling(await readJson(request), user, tenantMappings, invoiceProvider);
+        if (monthly.status !== "completed") {
+          recordRun(runStore, user, "monthly_billing_export", monthly.status, startedAt, 0);
+          return sendJson(response, monthly.status === "configuration_required" ? 422 : 503, { status: monthly.status, workflowId: "monthly_billing_query" });
+        }
+        const file = await createXlsxExport(buildMonthlyBillingExportRows(monthly.result));
+        recordRun(runStore, user, "monthly_billing_export", "completed", startedAt, monthly.result.items.length);
+        response.writeHead(200, {
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "content-disposition": `attachment; filename="monthly-billing-${monthly.result.month}.xlsx"`,
+          "cache-control": "no-store"
+        });
+        return response.end(file);
+      } catch {
+        recordRun(runStore, user, "monthly_billing_export", "invalid_input", startedAt, 0);
+        return sendJson(response, 400, { status: "invalid_input", workflowId: "monthly_billing_query" });
       }
     }
 

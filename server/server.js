@@ -2,6 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createServer } = require("./app");
 const { createSampleProvider } = require("./providers/sample-provider");
+const { createSampleInvoiceProvider } = require("./providers/sample-invoice-provider");
+const { createNewWisdomInvoiceProvider } = require("./providers/new-wisdom-invoice-provider");
 const { createNewWisdomProvider } = require("./providers/new-wisdom-provider");
 const { createCachedProvider } = require("./provider-cache");
 const { createAuthService, loadUsers } = require("./auth-service");
@@ -27,6 +29,17 @@ const provider = createCachedProvider(auditedProvider, {
   ttlMs: Number(process.env.LOOKUP_CACHE_TTL_MS || 30_000),
   maxEntries: Number(process.env.LOOKUP_CACHE_MAX_ENTRIES || 1_000)
 });
+const invoiceRequestTemplate = process.env.NEW_WISDOM_INVOICE_REQUEST_TEMPLATE
+  ? JSON.parse(process.env.NEW_WISDOM_INVOICE_REQUEST_TEMPLATE)
+  : null;
+const invoiceProvider = useNewWisdom && invoiceRequestTemplate
+  ? createNewWisdomInvoiceProvider({
+      username: process.env.NEXTSLS_USERNAME,
+      password: process.env.NEXTSLS_PASSWORD,
+      requestTemplate: invoiceRequestTemplate,
+      browserFactory: async () => (await require("playwright")).chromium.launch({ headless: true })
+    })
+  : useNewWisdom ? null : createSampleInvoiceProvider();
 const databasePath = process.env.PORTAL_DB_PATH || path.resolve(__dirname, "..", "data", "portal.sqlite");
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 const stores = createSqliteStores({ filename: databasePath });
@@ -42,6 +55,6 @@ const auth = requireAuth
       users: loadUsers(process.env.PORTAL_USERS_JSON || "[]")
     })
   : null;
-const server = createServer({ provider, auth, requireAuth, runStore, tenantMappings, staticRoot: path.resolve(__dirname, "..") });
+const server = createServer({ provider, invoiceProvider, auth, requireAuth, runStore, tenantMappings, staticRoot: path.resolve(__dirname, "..") });
 server.once("close", () => stores.close());
 server.listen(port, host, () => console.log(`Waybill portal: http://${host}:${port}`));

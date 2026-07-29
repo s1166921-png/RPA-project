@@ -21,6 +21,13 @@ const DEFINITIONS = [
     readOnly: true
   },
   {
+    workflowId: "monthly_billing_query",
+    name: "\u6708\u5ea6\u8d26\u5355\u67e5\u8be2",
+    description: "\u6309\u6708\u4efd\u67e5\u8be2\u5df2\u914d\u7f6e\u79df\u6237\u7684\u8d26\u5355\u6c47\u603b\u548c\u660e\u7ec6\u3002",
+    requiredInputs: ["month"],
+    readOnly: true
+  },
+  {
     workflowId: "billing_weight_confirmation",
     name: "计费重确认",
     description: "按费用分支生成客户确认内容，不发送消息。",

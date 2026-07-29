@@ -25,4 +25,12 @@ function buildBatchExportRows(results) {
   })];
 }
 
-module.exports = { buildExportRows, buildBatchExportRows };
+function buildMonthlyBillingExportRows(result) {
+  const headers = ["\u8d26\u5355\u6708\u4efd", "\u8d26\u5355\u53f7", "\u8d26\u5355\u65e5\u671f", "\u5e01\u79cd", "\u5e94\u6536", "\u5df2\u4ed8", "\u672a\u4ed8", "\u72b6\u6001", "\u6570\u636e\u6765\u6e90", "\u67e5\u8be2\u65f6\u95f4"];
+  return [headers, ...(result?.items || []).map((item) => [
+    result.month || "", item.invoiceNumber, item.invoiceDate, item.currency, item.totalAmount,
+    item.paidAmount, item.remainingAmount, item.status, item.source, item.queriedAt
+  ])];
+}
+
+module.exports = { buildExportRows, buildBatchExportRows, buildMonthlyBillingExportRows };

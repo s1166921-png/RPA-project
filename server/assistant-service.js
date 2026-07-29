@@ -5,7 +5,21 @@ function extractWaybillNumbers(message) {
   return parseWaybillNumbers(matches).waybillNumbers;
 }
 
+function extractBillingMonth(message) {
+  const match = String(message || "").match(/\b(\d{4})-(0[1-9]|1[0-2])\b/);
+  return match ? `${match[1]}-${match[2]}` : "";
+}
+
+function isMonthlyBillingRequest(message) {
+  return /\u6708\u8d26\u5355|\u6708\u5ea6\u8d26\u5355|\u8d26\u5355.*\u6708\u4efd|\u6309\u6708.*\u8d26\u5355/.test(String(message || ""));
+}
+
 function interpretAssistantMessage(message) {
+  const monthlyBilling = isMonthlyBillingRequest(message);
+  const month = extractBillingMonth(message);
+  if (monthlyBilling) return month
+    ? { intent: "monthly_billing_query", month, waybillNumbers: [] }
+    : { intent: "need_month", waybillNumbers: [] };
   const waybillNumbers = extractWaybillNumbers(message);
   if (!waybillNumbers.length) return { intent: "need_waybill", waybillNumbers: [] };
   const text = String(message || "");
@@ -28,8 +42,20 @@ function lookupReply(results) {
 
 async function handleAssistantMessage(message, tools) {
   const interpretation = interpretAssistantMessage(message);
+  if (interpretation.intent === "need_month") {
+    return { ...interpretation, reply: "\u8bf7\u63d0\u4f9b\u8d26\u5355\u6708\u4efd\uff0c\u4f8b\u5982 2026-07\u3002" };
+  }
   if (interpretation.intent === "need_waybill") {
     return { ...interpretation, reply: "请提供一个或多个运单号，我再为你查询。" };
+  }
+  if (interpretation.intent === "monthly_billing_query") {
+    const billing = await tools.monthlyBilling(interpretation.month);
+    return {
+      ...interpretation,
+      tool: "monthlyBillingQuery",
+      ...billing,
+      reply: "\u5df2\u8c03\u7528\u6708\u5ea6\u8d26\u5355\u67e5\u8be2\u5de5\u4f5c\u6d41\uff0c\u91d1\u989d\u4ee5\u7cfb\u7edf\u67e5\u8be2\u7ed3\u679c\u4e3a\u51c6\u3002"
+    };
   }
   if (interpretation.intent === "billing_weight_confirmation") {
     const workflow = await tools.billing(interpretation.waybillNumbers);
@@ -66,4 +92,4 @@ async function handleAssistantMessage(message, tools) {
   return { ...interpretation, tool: "batchLookup", ...lookup, reply: lookupReply(lookup.results || []) };
 }
 
-module.exports = { extractWaybillNumbers, handleAssistantMessage, interpretAssistantMessage };
+module.exports = { extractBillingMonth, extractWaybillNumbers, handleAssistantMessage, interpretAssistantMessage };

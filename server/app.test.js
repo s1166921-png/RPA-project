@@ -93,7 +93,7 @@ test("serves the customer-safe workflow catalog", async (t) => {
   const response = await get(server, "/api/workflows/definitions");
   assert.equal(response.status, 200);
   assert.deepEqual(response.body.workflows.map((workflow) => workflow.workflowId), [
-    "waybill_lookup", "shipment_tracking", "billing_query", "billing_weight_confirmation", "weight_validation"
+    "waybill_lookup", "shipment_tracking", "billing_query", "monthly_billing_query", "billing_weight_confirmation", "weight_validation"
   ]);
 });
 
@@ -149,6 +149,60 @@ test("allows only an administrator to manage local tenant mappings", async (t) =
   const customerLogin = await request(server, { username: "customer", password: "customer-pass" }, "/api/auth/login");
   const denied = await get(server, "/api/operations/tenant-mappings", { authorization: `Bearer ${customerLogin.body.token}` });
   assert.equal(denied.status, 403);
+});
+
+test("queries only mapped monthly invoices and omits source user identifiers", async (t) => {
+  const auth = authForTests();
+  const invoiceProvider = {
+    async findByMonth() {
+      return [
+        { invoiceUserId: "101", invoiceNumber: "INV-A", invoiceDate: "2026-07-02", currency: "CNY", totalAmount: "12.00", paidAmount: "2.00", remainingAmount: "10.00", status: "unpaid", source: "test" },
+        { invoiceUserId: "202", invoiceNumber: "INV-B", invoiceDate: "2026-07-02", currency: "CNY", totalAmount: "99.00", paidAmount: "0.00", remainingAmount: "99.00", status: "unpaid", source: "test" }
+      ];
+    }
+  };
+  const server = await start({ async findByWaybill() { return null; } }, {
+    auth,
+    requireAuth: true,
+    invoiceProvider,
+    tenantMappings: createTenantMappingStore([{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }])
+  });
+  t.after(() => server.close());
+
+  const login = await request(server, { username: "client-a", password: "pass-a" }, "/api/auth/login");
+  const response = await request(server, { month: "2026-07" }, "/api/workflows/monthly-billing-query", { authorization: `Bearer ${login.body.token}` });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.workflowId, "monthly_billing_query");
+  assert.deepEqual(response.body.items.map((item) => item.invoiceNumber), ["INV-A"]);
+  assert.equal(Object.hasOwn(response.body.items[0], "invoiceUserId"), false);
+  assert.deepEqual(response.body.totals, [{ currency: "CNY", totalAmount: "12.00", paidAmount: "2.00", remainingAmount: "10.00" }]);
+});
+
+test("exports only the authenticated tenant's monthly bill", async (t) => {
+  const auth = authForTests();
+  const server = await start({ async findByWaybill() { return null; } }, {
+    auth,
+    requireAuth: true,
+    invoiceProvider: {
+      async findByMonth() {
+        return [
+          { invoiceUserId: "101", invoiceNumber: "INV-A", invoiceDate: "2026-07-02", currency: "CNY", totalAmount: "12.00", paidAmount: "2.00", remainingAmount: "10.00", status: "unpaid", source: "test" },
+          { invoiceUserId: "202", invoiceNumber: "INV-B", invoiceDate: "2026-07-02", currency: "CNY", totalAmount: "99.00", paidAmount: "0.00", remainingAmount: "99.00", status: "unpaid", source: "test" }
+        ];
+      }
+    },
+    tenantMappings: createTenantMappingStore([{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }])
+  });
+  t.after(() => server.close());
+
+  const login = await request(server, { username: "client-a", password: "pass-a" }, "/api/auth/login");
+  const response = await download(server, { month: "2026-07" }, "/api/exports/monthly-billing", { authorization: `Bearer ${login.body.token}` });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  assert.match(response.disposition, /monthly-billing-2026-07\.xlsx/);
+  assert.equal(response.body.subarray(0, 2).toString(), "PK");
 });
 
 test("runs a batch lookup and retains found and missing statuses", async (t) => {

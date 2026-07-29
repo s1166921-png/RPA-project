@@ -15,6 +15,7 @@
 - Privacy-safe source audit events with masked waybills and no raw source errors.
 - Admin-only tenant mapping and operations overview for source customer and invoice-user scoping.
 - Local SQLite persistence for tenant mappings and workflow-run summaries across service restarts.
+- Month-level billing workflow and fixed Excel export with mandatory tenant invoice-user mappings.
 
 ## Runtime modes
 
@@ -24,7 +25,7 @@
 
 ## Deferred nodes
 
-- Month-level bill workflow using the verified customer-bill endpoint and configured invoice-user mappings.
+- Confirm and configure the exact New Wisdom customer-bill request template before enabling production month billing. The adapter refuses unscoped queries.
 - Sync retries, export task management, and migration from local SQLite to a shared production relational database.
 - Human-approved enterprise WeChat send, add-label, and remove-label workflows.
 - Email ingestion, information reconciliation, weighing validation, and other V2/V3 workflows.
