@@ -13,6 +13,7 @@
 - Server-side export re-query, so submitted client result objects cannot define exported business values.
 - Tenant-scoped workflow history with privacy-safe summaries.
 - Privacy-safe source audit events with masked waybills and no raw source errors.
+- Admin-only tenant mapping and operations overview for source customer and invoice-user scoping.
 
 ## Runtime modes
 
@@ -22,7 +23,7 @@
 
 ## Deferred nodes
 
-- Month-level bill API and persistent relational database.
+- Month-level bill workflow using the verified customer-bill endpoint and configured invoice-user mappings.
 - Operations console for customer mappings, sync retries, and export task management.
 - Human-approved enterprise WeChat send, add-label, and remove-label workflows.
 - Email ingestion, information reconciliation, weighing validation, and other V2/V3 workflows.

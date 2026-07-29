@@ -62,7 +62,7 @@ function recordRun(runStore, user, workflowId, status, startedAt, inputCount) {
   });
 }
 
-function createServer({ provider, staticRoot, auth = null, requireAuth = false, runStore = null }) {
+function createServer({ provider, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null }) {
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
@@ -91,8 +91,42 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false, 
       return sendJson(response, 200, { status: "ok", runs: runStore?.list(user?.tenantId || "public") || [] });
     }
 
+    if (request.method === "GET" && request.url === "/api/auth/me") {
+      return user
+        ? sendJson(response, 200, { status: "authenticated", user: auth.publicUser(user) })
+        : sendJson(response, 401, { status: "authentication_required" });
+    }
+
     if (request.method === "GET" && request.url === "/api/workflows/definitions") {
       return sendJson(response, 200, { status: "ok", workflows: listWorkflowDefinitions() });
+    }
+
+    if (request.url.startsWith("/api/operations/") && !auth?.isAdmin(user)) {
+      return sendJson(response, 403, { status: "forbidden" });
+    }
+
+    if (request.method === "GET" && request.url === "/api/operations/overview") {
+      return sendJson(response, 200, {
+        status: "ok",
+        tenantMappingCount: tenantMappings?.list().length || 0,
+        workflowCount: listWorkflowDefinitions().length,
+        recentRunCount: runStore?.list().length || 0
+      });
+    }
+
+    if (request.method === "GET" && request.url === "/api/operations/tenant-mappings") {
+      return sendJson(response, 200, { status: "ok", mappings: tenantMappings?.list() || [] });
+    }
+
+    const mappingMatch = request.url.match(/^\/api\/operations\/tenant-mappings\/([^/?]+)$/);
+    if (request.method === "PUT" && mappingMatch) {
+      try {
+        if (!tenantMappings) return sendJson(response, 503, { status: "configuration_unavailable" });
+        const mapping = tenantMappings.upsert(decodeURIComponent(mappingMatch[1]), await readJson(request));
+        return sendJson(response, 200, { status: "saved", mapping });
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input" });
+      }
     }
 
     if (request.method === "POST" && request.url === "/api/shipments/lookup") {

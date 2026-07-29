@@ -31,6 +31,7 @@ function createAuthService({ secret, users = [], ttlMs = 3_600_000, now = () => 
     username: String(user.username),
     passwordHash: String(user.passwordHash),
     tenantId: String(user.tenantId),
+    role: user.role === "admin" ? "admin" : "customer",
     allowedCustomerCodes: Array.isArray(user.allowedCustomerCodes) ? user.allowedCustomerCodes.map(String) : []
   }));
 
@@ -60,7 +61,17 @@ function createAuthService({ secret, users = [], ttlMs = 3_600_000, now = () => 
     return Boolean(user && shipment && shipment.customerCode && user.allowedCustomerCodes.includes(shipment.customerCode));
   }
 
-  return { login, verify, canAccess };
+  function isAdmin(user) {
+    return user?.role === "admin";
+  }
+
+  function publicUser(user) {
+    if (!user) return null;
+    const { passwordHash, ...profile } = user;
+    return profile;
+  }
+
+  return { login, verify, canAccess, isAdmin, publicUser };
 }
 
 function loadUsers(value = "[]") {

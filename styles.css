@@ -166,6 +166,12 @@ textarea {
 .history-heading h2 { margin: 0; font-size: 20px; }
 .history-result { display: grid; gap: 8px; margin-top: 14px; color: var(--muted); }
 .history-item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.operations-panel { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
+.operations-result { display: grid; gap: 8px; margin-top: 14px; color: var(--muted); }
+.operation-mapping { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+.tenant-mapping-form { display: grid; gap: 8px; margin-top: 14px; max-width: 560px; }
+.tenant-mapping-form label { font-weight: 700; }
+.tenant-mapping-form input { min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 
 .assistant-panel {
   margin-top: 18px;

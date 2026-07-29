@@ -69,6 +69,26 @@
         </div>
         <div id="historyResult" class="history-result" aria-live="polite"></div>
       </section>
+
+      <section id="operationsPanel" class="operations-panel" hidden aria-labelledby="operationsTitle">
+        <div class="history-heading">
+          <div>
+            <p class="eyebrow">运营管理</p>
+            <h2 id="operationsTitle">租户映射与运行概览</h2>
+          </div>
+          <button id="operationsRefresh" type="button">刷新</button>
+        </div>
+        <div id="operationsResult" class="operations-result" aria-live="polite"></div>
+        <form id="tenantMappingForm" class="tenant-mapping-form">
+          <label for="mappingTenantId">租户 ID</label>
+          <input id="mappingTenantId" required />
+          <label for="mappingCustomerCodes">客户编码</label>
+          <input id="mappingCustomerCodes" placeholder="多个编码用逗号分隔" />
+          <label for="mappingInvoiceUserIds">账单用户 ID</label>
+          <input id="mappingInvoiceUserIds" placeholder="多个 ID 用逗号分隔" />
+          <button type="submit">保存映射</button>
+        </form>
+      </section>
     </main>
     <script src="./script.js"></script>
   </body>

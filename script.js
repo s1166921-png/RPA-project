@@ -15,7 +15,15 @@ let currentInput = "";
 const historyButton = document.querySelector("#historyButton");
 const historyResult = document.querySelector("#historyResult");
 const workflowCatalog = document.querySelector("#workflowCatalog");
+const operationsPanel = document.querySelector("#operationsPanel");
+const operationsRefresh = document.querySelector("#operationsRefresh");
+const operationsResult = document.querySelector("#operationsResult");
+const tenantMappingForm = document.querySelector("#tenantMappingForm");
+const mappingTenantId = document.querySelector("#mappingTenantId");
+const mappingCustomerCodes = document.querySelector("#mappingCustomerCodes");
+const mappingInvoiceUserIds = document.querySelector("#mappingInvoiceUserIds");
 let authToken = sessionStorage.getItem("portalAuthToken") || "";
+let currentUser = null;
 
 function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -28,6 +36,18 @@ function showLoginRequired() {
   if (loginStatus) loginStatus.textContent = "请先登录后查询。";
 }
 
+function setOperationsVisible(user) {
+  if (operationsPanel) operationsPanel.hidden = user?.role !== "admin";
+}
+
+async function loadCurrentUser() {
+  if (!authToken) return null;
+  const response = await apiFetch("/api/auth/me");
+  if (!response.ok) return null;
+  const payload = await response.json();
+  return payload.user;
+}
+
 async function initializeAuth() {
   try {
     const response = await fetch("/api/auth/config");
@@ -38,6 +58,9 @@ async function initializeAuth() {
       loginStatus.textContent = "已登录，可查询所属客户数据。";
       logoutButton.hidden = false;
       loginForm.hidden = true;
+      currentUser = await loadCurrentUser();
+      setOperationsVisible(currentUser);
+      loadWorkflowCatalog();
     }
   } catch {
     // Direct lookup mode can continue when the optional auth config is unavailable.
@@ -48,7 +71,7 @@ initializeAuth();
 
 async function loadWorkflowCatalog() {
   try {
-    const response = await fetch("/api/workflows/definitions");
+    const response = await apiFetch("/api/workflows/definitions");
     if (!response.ok) return;
     const payload = await response.json();
     workflowCatalog.innerHTML = "";
@@ -83,10 +106,13 @@ loginForm?.addEventListener("submit", async (event) => {
     const payload = await response.json();
     if (!response.ok) throw new Error("invalid credentials");
     authToken = payload.token;
+    currentUser = payload.user;
     sessionStorage.setItem("portalAuthToken", authToken);
     loginStatus.textContent = "登录成功，可查询所属客户数据。";
     loginForm.hidden = true;
     logoutButton.hidden = false;
+    setOperationsVisible(currentUser);
+    loadWorkflowCatalog();
     loginPassword.value = "";
   } catch {
     loginStatus.textContent = "账号或密码不正确，请重试。";
@@ -98,7 +124,60 @@ logoutButton?.addEventListener("click", () => {
   sessionStorage.removeItem("portalAuthToken");
   loginForm.hidden = false;
   logoutButton.hidden = true;
+  currentUser = null;
+  setOperationsVisible(null);
   loginStatus.textContent = "已退出登录。";
+});
+
+function parseCsv(value) {
+  return value.split(/[,，\s]+/).map((item) => item.trim()).filter(Boolean);
+}
+
+async function loadOperations() {
+  operationsResult.textContent = "正在读取运营信息…";
+  try {
+    const [overviewResponse, mappingsResponse] = await Promise.all([
+      apiFetch("/api/operations/overview"),
+      apiFetch("/api/operations/tenant-mappings")
+    ]);
+    if (!overviewResponse.ok || !mappingsResponse.ok) throw new Error("operations request failed");
+    const overview = await overviewResponse.json();
+    const mappings = await mappingsResponse.json();
+    operationsResult.innerHTML = "";
+    const summary = document.createElement("p");
+    summary.textContent = `工作流：${overview.workflowCount}；租户映射：${overview.tenantMappingCount}；近期运行：${overview.recentRunCount}`;
+    operationsResult.append(summary);
+    mappings.mappings.forEach((mapping) => {
+      const item = document.createElement("article");
+      item.className = "operation-mapping";
+      item.textContent = `${mapping.tenantId} · 客户编码 ${mapping.customerCodes.join(", ") || "-"} · 账单用户 ID ${mapping.invoiceUserIds.join(", ") || "-"}`;
+      operationsResult.append(item);
+    });
+  } catch {
+    operationsResult.textContent = "运营信息暂时不可用。";
+  }
+}
+
+operationsRefresh?.addEventListener("click", loadOperations);
+
+tenantMappingForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const tenantId = mappingTenantId.value.trim();
+  if (!tenantId) return;
+  try {
+    const response = await apiFetch(`/api/operations/tenant-mappings/${encodeURIComponent(tenantId)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        customerCodes: parseCsv(mappingCustomerCodes.value),
+        invoiceUserIds: parseCsv(mappingInvoiceUserIds.value)
+      })
+    });
+    if (!response.ok) throw new Error("mapping save failed");
+    await loadOperations();
+  } catch {
+    operationsResult.textContent = "映射保存失败。";
+  }
 });
 
 historyButton?.addEventListener("click", async () => {

@@ -38,3 +38,11 @@ test("checks shipment customer scope from the verified identity", () => {
   assert.equal(auth.canAccess(user, { customerCode: "CUST-B" }), false);
   assert.equal(auth.canAccess(user, { customerCode: "" }), false);
 });
+
+test("recognizes an explicitly configured administrator", () => {
+  const auth = createAuthService({
+    secret: "test-secret",
+    users: [{ username: "admin", passwordHash: hashPassword("admin-pass"), tenantId: "operations", role: "admin", allowedCustomerCodes: [] }]
+  });
+  assert.equal(auth.isAdmin(auth.verify(auth.login("admin", "admin-pass").token)), true);
+});

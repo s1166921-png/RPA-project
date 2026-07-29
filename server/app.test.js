@@ -5,6 +5,7 @@ const test = require("node:test");
 const { createServer } = require("./app");
 const { createAuthService, hashPassword } = require("./auth-service");
 const { createWorkflowRunStore } = require("./workflow-run-store");
+const { createTenantMappingStore } = require("./tenant-mapping-store");
 
 async function start(provider, options = {}) {
   const server = createServer({ provider, staticRoot: __dirname + "/..", ...options });
@@ -12,14 +13,14 @@ async function start(provider, options = {}) {
   return server;
 }
 
-async function request(server, body, pathname = "/api/shipments/lookup", extraHeaders = {}) {
+async function request(server, body, pathname = "/api/shipments/lookup", extraHeaders = {}, method = "POST") {
   const address = server.address();
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: "127.0.0.1",
       port: address.port,
       path: pathname,
-      method: "POST",
+      method,
       headers: { "content-type": "application/json", ...extraHeaders }
     }, (res) => {
       let text = "";
@@ -121,6 +122,33 @@ test("requires login and masks another tenant's shipment", async (t) => {
     results: [{ status: "found", shipment: { waybillNumber: "MO-B", customerCode: "CUST-B" } }]
   }, "/api/exports/batch-waybills", headers);
   assert.equal(crossTenantExport.status, 404);
+});
+
+test("allows only an administrator to manage local tenant mappings", async (t) => {
+  const auth = createAuthService({
+    secret: "operations-secret",
+    users: [
+      { username: "admin", passwordHash: hashPassword("admin-pass"), tenantId: "operations", role: "admin", allowedCustomerCodes: [] },
+      { username: "customer", passwordHash: hashPassword("customer-pass"), tenantId: "tenant-a", allowedCustomerCodes: ["CUST-A"] }
+    ]
+  });
+  const server = await start({ async findByWaybill() { return null; } }, {
+    auth,
+    requireAuth: true,
+    tenantMappings: createTenantMappingStore()
+  });
+  t.after(() => server.close());
+
+  const adminLogin = await request(server, { username: "admin", password: "admin-pass" }, "/api/auth/login");
+  const adminHeaders = { authorization: `Bearer ${adminLogin.body.token}` };
+  const saved = await request(server, { customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }, "/api/operations/tenant-mappings/tenant-a", adminHeaders, "PUT");
+  assert.equal(saved.status, 200);
+  const mappings = await get(server, "/api/operations/tenant-mappings", adminHeaders);
+  assert.deepEqual(mappings.body.mappings, [{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }]);
+
+  const customerLogin = await request(server, { username: "customer", password: "customer-pass" }, "/api/auth/login");
+  const denied = await get(server, "/api/operations/tenant-mappings", { authorization: `Bearer ${customerLogin.body.token}` });
+  assert.equal(denied.status, 403);
 });
 
 test("runs a batch lookup and retains found and missing statuses", async (t) => {
