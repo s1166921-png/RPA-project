@@ -22,6 +22,12 @@ const tenantMappingForm = document.querySelector("#tenantMappingForm");
 const mappingTenantId = document.querySelector("#mappingTenantId");
 const mappingCustomerCodes = document.querySelector("#mappingCustomerCodes");
 const mappingInvoiceUserIds = document.querySelector("#mappingInvoiceUserIds");
+const portalUserForm = document.querySelector("#portalUserForm");
+const portalUserResult = document.querySelector("#portalUserResult");
+const portalUserUsername = document.querySelector("#portalUserUsername");
+const portalUserPassword = document.querySelector("#portalUserPassword");
+const portalUserTenantId = document.querySelector("#portalUserTenantId");
+const portalUserCustomerCodes = document.querySelector("#portalUserCustomerCodes");
 const monthlyBillingForm = document.querySelector("#monthlyBillingForm");
 const monthlyBillingMonth = document.querySelector("#monthlyBillingMonth");
 const monthlyBillingResult = document.querySelector("#monthlyBillingResult");
@@ -226,15 +232,17 @@ function parseCsv(value) {
 async function loadOperations() {
   operationsResult.textContent = "正在读取运营信息…";
   try {
-    const [overviewResponse, mappingsResponse, readinessResponse] = await Promise.all([
+    const [overviewResponse, mappingsResponse, readinessResponse, usersResponse] = await Promise.all([
       apiFetch("/api/operations/overview"),
       apiFetch("/api/operations/tenant-mappings"),
-      apiFetch("/api/operations/source-readiness")
+      apiFetch("/api/operations/source-readiness"),
+      apiFetch("/api/operations/users")
     ]);
-    if (!overviewResponse.ok || !mappingsResponse.ok || !readinessResponse.ok) throw new Error("operations request failed");
+    if (!overviewResponse.ok || !mappingsResponse.ok || !readinessResponse.ok || !usersResponse.ok) throw new Error("operations request failed");
     const overview = await overviewResponse.json();
     const mappings = await mappingsResponse.json();
     const readiness = await readinessResponse.json();
+    const users = await usersResponse.json();
     operationsResult.innerHTML = "";
     const summary = document.createElement("p");
     summary.textContent = `工作流：${overview.workflowCount}；租户映射：${overview.tenantMappingCount}；近期运行：${overview.recentRunCount}`;
@@ -248,6 +256,13 @@ async function loadOperations() {
       item.className = "operation-mapping";
       item.textContent = `${mapping.tenantId} · 客户编码 ${mapping.customerCodes.join(", ") || "-"} · 账单用户 ID ${mapping.invoiceUserIds.join(", ") || "-"}`;
       operationsResult.append(item);
+    });
+    portalUserResult.innerHTML = "";
+    users.users.forEach((user) => {
+      const item = document.createElement("article");
+      item.className = "portal-user-item";
+      item.textContent = `${user.username} · ${user.tenantId} · ${user.enabled ? "启用" : "停用"}`;
+      portalUserResult.append(item);
     });
   } catch {
     operationsResult.textContent = "运营信息暂时不可用。";
@@ -273,6 +288,27 @@ tenantMappingForm?.addEventListener("submit", async (event) => {
     await loadOperations();
   } catch {
     operationsResult.textContent = "映射保存失败。";
+  }
+});
+
+portalUserForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const response = await apiFetch("/api/operations/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: portalUserUsername.value.trim(),
+        password: portalUserPassword.value,
+        tenantId: portalUserTenantId.value.trim(),
+        allowedCustomerCodes: parseCsv(portalUserCustomerCodes.value)
+      })
+    });
+    if (!response.ok) throw new Error("portal user creation failed");
+    portalUserPassword.value = "";
+    await loadOperations();
+  } catch {
+    portalUserResult.textContent = "客户账号创建失败，请检查账号、密码和租户信息。";
   }
 });
 

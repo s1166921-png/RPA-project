@@ -61,3 +61,20 @@ test("requeues only a failed export task for its owning tenant", () => {
     stores.close();
   }
 });
+
+test("stores portal users with password hashes hidden from administrative listings", () => {
+  const stores = createSqliteStores({ filename: ":memory:", now: () => 1234 });
+  try {
+    stores.portalUsers.upsert({
+      username: "client-a", passwordHash: "scrypt$secret", tenantId: "tenant-a", role: "customer", allowedCustomerCodes: ["CUST-A"], enabled: true
+    });
+    assert.deepEqual(stores.portalUsers.get("client-a"), {
+      username: "client-a", passwordHash: "scrypt$secret", tenantId: "tenant-a", role: "customer", allowedCustomerCodes: ["CUST-A"], enabled: true
+    });
+    assert.deepEqual(stores.portalUsers.list(), [{
+      username: "client-a", tenantId: "tenant-a", role: "customer", allowedCustomerCodes: ["CUST-A"], enabled: true
+    }]);
+  } finally {
+    stores.close();
+  }
+});

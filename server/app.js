@@ -12,6 +12,7 @@ const { parseBillingMonth, runMonthlyBillingWorkflow } = require("./monthly-bill
 const { listWorkflowDefinitions } = require("./workflow-definitions");
 const { runWeightValidationWorkflow } = require("./weight-validation-workflow");
 const { handleAssistantMessage } = require("./assistant-service");
+const { hashPassword } = require("./auth-service");
 
 const MAX_BATCH_RESULTS = 50;
 
@@ -100,7 +101,7 @@ function scheduleMonthlyBillingExport({ task, request, user, tenantMappings, inv
   });
 }
 
-function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null }) {
+function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null, portalUsers = null }) {
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
@@ -158,6 +159,35 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
 
     if (request.method === "GET" && request.url === "/api/operations/tenant-mappings") {
       return sendJson(response, 200, { status: "ok", mappings: tenantMappings?.list() || [] });
+    }
+
+    if (request.method === "GET" && request.url === "/api/operations/users") {
+      return sendJson(response, 200, { status: "ok", users: portalUsers?.list() || [] });
+    }
+
+    if (request.method === "POST" && request.url === "/api/operations/users") {
+      try {
+        if (!portalUsers) return sendJson(response, 503, { status: "configuration_unavailable" });
+        const body = await readJson(request);
+        const username = String(body.username || "").trim();
+        const password = String(body.password || "");
+        const tenantId = String(body.tenantId || "").trim();
+        if (!/^[A-Za-z0-9._-]{3,80}$/.test(username) || password.length < 8 || !tenantId) {
+          return sendJson(response, 400, { status: "invalid_input" });
+        }
+        const stored = portalUsers.upsert({
+          username,
+          passwordHash: hashPassword(password),
+          tenantId,
+          role: "customer",
+          allowedCustomerCodes: Array.isArray(body.allowedCustomerCodes) ? body.allowedCustomerCodes : [],
+          enabled: true
+        });
+        const { passwordHash, ...publicUser } = stored;
+        return sendJson(response, 201, { status: "created", user: publicUser });
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input" });
+      }
     }
 
     const mappingMatch = request.url.match(/^\/api\/operations\/tenant-mappings\/([^/?]+)$/);

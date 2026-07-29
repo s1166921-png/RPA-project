@@ -18,6 +18,7 @@
 - Month-level billing workflow and fixed Excel export with mandatory tenant invoice-user mappings.
 - Async export center with tenant-scoped task status, download, and retry for month-billing files.
 - Admin-only production source readiness check that validates the invoice template without exposing credentials or template contents.
+- Persistent portal customer accounts managed by administrators, with hashed passwords and tenant/customer-code scope.
 
 ## Runtime modes
 

@@ -149,20 +149,23 @@ test("requires login and masks another tenant's shipment", async (t) => {
 });
 
 test("allows only an administrator to manage local tenant mappings", async (t) => {
+  const stores = createSqliteStores();
   const auth = createAuthService({
     secret: "operations-secret",
     users: [
       { username: "admin", passwordHash: hashPassword("admin-pass"), tenantId: "operations", role: "admin", allowedCustomerCodes: [] },
       { username: "customer", passwordHash: hashPassword("customer-pass"), tenantId: "tenant-a", allowedCustomerCodes: ["CUST-A"] }
-    ]
+    ],
+    userStore: stores.portalUsers
   });
   const server = await start({ async findByWaybill() { return null; } }, {
     auth,
     requireAuth: true,
     tenantMappings: createTenantMappingStore(),
-    sourceReadiness: { mode: "new_wisdom", enabled: false, reason: "invoice_template_required" }
+    sourceReadiness: { mode: "new_wisdom", enabled: false, reason: "invoice_template_required" },
+    portalUsers: stores.portalUsers
   });
-  t.after(() => server.close());
+  t.after(() => { server.close(); stores.close(); });
 
   const adminLogin = await request(server, { username: "admin", password: "admin-pass" }, "/api/auth/login");
   const adminHeaders = { authorization: `Bearer ${adminLogin.body.token}` };
@@ -172,9 +175,18 @@ test("allows only an administrator to manage local tenant mappings", async (t) =
   assert.deepEqual(mappings.body.mappings, [{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }]);
   const readiness = await get(server, "/api/operations/source-readiness", adminHeaders);
   assert.deepEqual(readiness.body, { status: "ok", invoiceMonthlyBilling: { mode: "new_wisdom", enabled: false, reason: "invoice_template_required" } });
+  const createdUser = await request(server, {
+    username: "client-new", password: "client-password", tenantId: "tenant-new", allowedCustomerCodes: ["CUST-NEW"]
+  }, "/api/operations/users", adminHeaders);
+  assert.equal(createdUser.status, 201);
+  assert.equal(Object.hasOwn(createdUser.body.user, "passwordHash"), false);
+  const portalUsers = await get(server, "/api/operations/users", adminHeaders);
+  assert.deepEqual(portalUsers.body.users, [{ username: "client-new", tenantId: "tenant-new", role: "customer", allowedCustomerCodes: ["CUST-NEW"], enabled: true }]);
+  const customerLogin = await request(server, { username: "client-new", password: "client-password" }, "/api/auth/login");
+  assert.equal(customerLogin.status, 200);
 
-  const customerLogin = await request(server, { username: "customer", password: "customer-pass" }, "/api/auth/login");
-  const denied = await get(server, "/api/operations/tenant-mappings", { authorization: `Bearer ${customerLogin.body.token}` });
+  const existingCustomerLogin = await request(server, { username: "customer", password: "customer-pass" }, "/api/auth/login");
+  const denied = await get(server, "/api/operations/tenant-mappings", { authorization: `Bearer ${existingCustomerLogin.body.token}` });
   assert.equal(denied.status, 403);
 });
 

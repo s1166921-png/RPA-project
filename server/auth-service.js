@@ -25,19 +25,26 @@ function sign(payload, secret) {
   return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-function createAuthService({ secret, users = [], ttlMs = 3_600_000, now = () => Date.now() }) {
+function createAuthService({ secret, users = [], userStore = null, ttlMs = 3_600_000, now = () => Date.now() }) {
   if (!secret) throw new Error("Auth token secret is required");
-  const records = users.map((user) => ({
+  const normalizeUser = (user) => ({
     username: String(user.username),
     passwordHash: String(user.passwordHash),
     tenantId: String(user.tenantId),
     role: user.role === "admin" ? "admin" : "customer",
-    allowedCustomerCodes: Array.isArray(user.allowedCustomerCodes) ? user.allowedCustomerCodes.map(String) : []
-  }));
+    allowedCustomerCodes: Array.isArray(user.allowedCustomerCodes) ? user.allowedCustomerCodes.map(String) : [],
+    enabled: user.enabled !== false
+  });
+  const records = users.map(normalizeUser);
+  const findUser = (username) => {
+    const normalizedUsername = String(username || "");
+    const stored = userStore?.get(normalizedUsername);
+    return stored ? normalizeUser(stored) : records.find((user) => user.username === normalizedUsername) || null;
+  };
 
   function login(username, password) {
-    const record = records.find((user) => user.username === String(username || ""));
-    if (!record) return null;
+    const record = findUser(username);
+    if (!record || !record.enabled) return null;
     if (!passwordMatches(password, record.passwordHash)) return null;
     const payload = { username: record.username, tenantId: record.tenantId, exp: now() + ttlMs };
     const encoded = encode(payload);
@@ -51,7 +58,8 @@ function createAuthService({ secret, users = [], ttlMs = 3_600_000, now = () => 
       if (!encoded || !signature || sign(encoded, secret) !== signature) return null;
       const payload = decode(encoded);
       if (!payload.exp || payload.exp <= now()) return null;
-      return records.find((user) => user.username === payload.username && user.tenantId === payload.tenantId) || null;
+      const record = findUser(payload.username);
+      return record?.enabled && record.tenantId === payload.tenantId ? record : null;
     } catch {
       return null;
     }

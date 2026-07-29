@@ -39,6 +39,15 @@ function createSqliteStores(options = {}) {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS portal_users (
+      username TEXT PRIMARY KEY,
+      password_hash TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      allowed_customer_codes TEXT NOT NULL,
+      enabled INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   const mappingFromRow = (row) => row && ({
@@ -66,6 +75,19 @@ function createSqliteStores(options = {}) {
   const listExportTasks = db.prepare("SELECT id, tenant_id, export_type, status, filename, created_at, updated_at FROM export_tasks WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ?");
   const getExportTask = db.prepare("SELECT id, tenant_id, export_type, status, request_json, filename, created_at, updated_at FROM export_tasks WHERE tenant_id = ? AND id = ?");
   const downloadExportTask = db.prepare("SELECT filename, file FROM export_tasks WHERE tenant_id = ? AND id = ? AND status = 'completed'");
+  const getPortalUser = db.prepare("SELECT * FROM portal_users WHERE username = ?");
+  const listPortalUsers = db.prepare("SELECT username, tenant_id, role, allowed_customer_codes, enabled FROM portal_users ORDER BY username");
+  const savePortalUser = db.prepare(`
+    INSERT INTO portal_users (username, password_hash, tenant_id, role, allowed_customer_codes, enabled, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(username) DO UPDATE SET
+      password_hash = excluded.password_hash,
+      tenant_id = excluded.tenant_id,
+      role = excluded.role,
+      allowed_customer_codes = excluded.allowed_customer_codes,
+      enabled = excluded.enabled,
+      updated_at = excluded.updated_at
+  `);
   const maxEntries = Number(options.maxEntries || 200);
   const newId = options.newId || crypto.randomUUID;
 
@@ -77,6 +99,14 @@ function createSqliteStores(options = {}) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     ...(row.filename ? { filename: row.filename } : {})
+  });
+  const userFromRow = (row, includePasswordHash = false) => row && ({
+    username: row.username,
+    ...(includePasswordHash ? { passwordHash: row.password_hash } : {}),
+    tenantId: row.tenant_id,
+    role: row.role === "admin" ? "admin" : "customer",
+    allowedCustomerCodes: normalizeStrings(parseJson(row.allowed_customer_codes)),
+    enabled: Boolean(row.enabled)
   });
 
   return {
@@ -136,6 +166,25 @@ function createSqliteStores(options = {}) {
       download(tenantId, id) {
         const row = downloadExportTask.get(String(tenantId), String(id));
         return row ? { filename: row.filename, file: Buffer.from(row.file) } : null;
+      }
+    },
+    portalUsers: {
+      get(username) {
+        return userFromRow(getPortalUser.get(String(username)), true);
+      },
+      list() {
+        return listPortalUsers.all().map((row) => userFromRow(row));
+      },
+      upsert(user) {
+        const username = String(user?.username || "").trim();
+        const passwordHash = String(user?.passwordHash || "").trim();
+        const tenantId = String(user?.tenantId || "").trim();
+        if (!username || !passwordHash || !tenantId) throw new Error("username, passwordHash, and tenantId are required");
+        const role = user.role === "admin" ? "admin" : "customer";
+        const allowedCustomerCodes = normalizeStrings(user.allowedCustomerCodes);
+        const enabled = user.enabled !== false;
+        savePortalUser.run(username, passwordHash, tenantId, role, JSON.stringify(allowedCustomerCodes), enabled ? 1 : 0, now());
+        return { username, passwordHash, tenantId, role, allowedCustomerCodes, enabled };
       }
     },
     close() { db.close(); }

@@ -17,7 +17,8 @@ async function run() {
     users: [
       { username: "admin", passwordHash: hashPassword("admin-pass"), tenantId: "operations", role: "admin", allowedCustomerCodes: [] },
       { username: "customer", passwordHash: hashPassword("customer-pass"), tenantId: "tenant-a", allowedCustomerCodes: ["CUST-A"] }
-    ]
+    ],
+    userStore: stores.portalUsers
   });
   const server = createServer({
     staticRoot: __dirname,
@@ -25,6 +26,7 @@ async function run() {
     requireAuth: true,
     runStore: stores.runStore,
     tenantMappings: stores.tenantMappings,
+    portalUsers: stores.portalUsers,
     provider: { async findByWaybill() { return null; } }
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -41,12 +43,23 @@ async function run() {
     await adminPage.locator("#tenantMappingForm button").click();
     await adminPage.waitForFunction(() => document.querySelector("#operationsResult").innerText.includes("tenant-a"), null, { timeout: 10_000 });
     assert.match(await adminPage.locator("#operationsResult").innerText(), /not_configured/);
+    await adminPage.locator("#portalUserUsername").fill("new-customer");
+    await adminPage.locator("#portalUserPassword").fill("new-customer-pass");
+    await adminPage.locator("#portalUserTenantId").fill("tenant-new");
+    await adminPage.locator("#portalUserCustomerCodes").fill("CUST-NEW");
+    await adminPage.locator("#portalUserForm button").click();
+    await adminPage.waitForFunction(() => document.querySelector("#portalUserResult").innerText.includes("new-customer"), null, { timeout: 10_000 });
 
     const customerPage = await browser.newPage();
     await customerPage.goto(`http://127.0.0.1:${server.address().port}`);
     await login(customerPage, "customer", "customer-pass");
     await customerPage.waitForFunction(() => document.querySelector("#loginForm").hidden, null, { timeout: 10_000 });
     assert.equal(await customerPage.locator("#operationsPanel").evaluate((panel) => panel.hidden), true);
+    const newCustomerPage = await browser.newPage();
+    await newCustomerPage.goto(`http://127.0.0.1:${server.address().port}`);
+    await login(newCustomerPage, "new-customer", "new-customer-pass");
+    await newCustomerPage.waitForFunction(() => document.querySelector("#loginForm").hidden, null, { timeout: 10_000 });
+    assert.equal(await newCustomerPage.locator("#operationsPanel").evaluate((panel) => panel.hidden), true);
     console.log(JSON.stringify({ operationsAdminUserPath: "passed", mappingSaved: "passed", customerOperationsHidden: "passed" }));
   } finally {
     await browser.close();

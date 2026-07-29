@@ -46,3 +46,14 @@ test("recognizes an explicitly configured administrator", () => {
   });
   assert.equal(auth.isAdmin(auth.verify(auth.login("admin", "admin-pass").token)), true);
 });
+
+test("uses a persistent user store for login and token verification", () => {
+  const user = {
+    username: "portal-client", passwordHash: hashPassword("portal-pass"), tenantId: "tenant-p", role: "customer", allowedCustomerCodes: ["CUST-P"], enabled: true
+  };
+  const auth = createAuthService({ secret: "test-secret", userStore: { get: (username) => username === user.username ? user : null } });
+
+  const login = auth.login("portal-client", "portal-pass");
+  assert.equal(login.user.tenantId, "tenant-p");
+  assert.equal(auth.verify(login.token).username, "portal-client");
+});

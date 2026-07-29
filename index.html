@@ -109,6 +109,18 @@
           <input id="mappingInvoiceUserIds" placeholder="多个 ID 用逗号分隔" />
           <button type="submit">保存映射</button>
         </form>
+        <div id="portalUserResult" class="portal-user-result" aria-live="polite"></div>
+        <form id="portalUserForm" class="portal-user-form">
+          <label for="portalUserUsername">门户账号</label>
+          <input id="portalUserUsername" autocomplete="off" required />
+          <label for="portalUserPassword">初始密码</label>
+          <input id="portalUserPassword" type="password" autocomplete="new-password" required />
+          <label for="portalUserTenantId">租户 ID</label>
+          <input id="portalUserTenantId" required />
+          <label for="portalUserCustomerCodes">客户编码</label>
+          <input id="portalUserCustomerCodes" placeholder="多个编码用逗号分隔" />
+          <button type="submit">创建客户账号</button>
+        </form>
       </section>
     </main>
     <script src="./script.js"></script>
