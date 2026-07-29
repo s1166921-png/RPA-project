@@ -21,12 +21,23 @@ async function run() {
   const address = server.address();
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+  let batchLookupRequests = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/api/shipments/batch-lookup")) batchLookupRequests += 1;
+  });
+  await page.route("**/api/shipments/batch-lookup", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await route.continue();
+  });
   try {
     await page.goto(`http://127.0.0.1:${address.port}`);
     await page.locator("#waybillNumbers").fill("MO10083334\nMISSING-1");
     await page.locator("#lookupForm button").click();
+    await expectText(page, "#lookupResult", "\u6b63\u5728\u67e5\u8be2 2 \u4e2a\u5355\u53f7");
     await page.locator('[data-waybill="MO10083334"][data-status="found"]').waitFor();
     await page.locator('[data-waybill="MISSING-1"][data-status="not_found"]').waitFor();
+    assert.equal(batchLookupRequests, 1);
+    assert.deepEqual(await page.locator(".batch-item").evaluateAll((items) => items.map((item) => item.dataset.waybill)), ["MO10083334", "MISSING-1"]);
     const download = page.waitForEvent("download");
     await page.locator("#downloadBatchExport").click();
     assert.match((await download).suggestedFilename(), /waybill-batch-\d+\.xlsx/);
