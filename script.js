@@ -306,6 +306,29 @@ function renderAssistantResult(payload) {
     return;
   }
 
+  if (payload.workflowId === "weight_validation" && Array.isArray(payload.items)) {
+    const panel = document.createElement("section");
+    panel.className = "workflow-message weight-validation-message";
+    const heading = document.createElement("h3");
+    heading.textContent = `${payload.name}（只读结果）`;
+    panel.append(heading);
+    payload.items.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "workflow-message-item weight-validation-item";
+      card.dataset.waybill = item.waybillNumber;
+      const title = document.createElement("strong");
+      title.textContent = `${item.waybillNumber} · ${item.validationStatus}`;
+      const details = document.createElement("p");
+      details.textContent = item.status === "found"
+        ? `实重：${item.actualWeight}KG；材重：${item.volumeWeight}KG；收费重：${item.chargeWeight}KG`
+        : displayReason(item.status);
+      card.append(title, details);
+      panel.append(card);
+    });
+    assistantResult.append(panel);
+    return;
+  }
+
   if (payload.workflowId === "shipment_tracking" && Array.isArray(payload.items)) {
     const panel = document.createElement("section");
     panel.className = "workflow-message tracking-message";

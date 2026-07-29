@@ -92,7 +92,7 @@ test("serves the customer-safe workflow catalog", async (t) => {
   const response = await get(server, "/api/workflows/definitions");
   assert.equal(response.status, 200);
   assert.deepEqual(response.body.workflows.map((workflow) => workflow.workflowId), [
-    "waybill_lookup", "shipment_tracking", "billing_query", "billing_weight_confirmation"
+    "waybill_lookup", "shipment_tracking", "billing_query", "billing_weight_confirmation", "weight_validation"
   ]);
 });
 
@@ -179,6 +179,19 @@ test("runs the read-only billing query workflow", async (t) => {
   assert.equal(response.body.workflowId, "billing_query");
   assert.equal(response.body.items[0].amount, "826.00");
   assert.equal(response.body.items[0].freightRate, "7.60/KG");
+});
+
+test("runs the read-only weight validation workflow", async (t) => {
+  const server = await start({
+    async findByWaybill(value) {
+      return { shipment_number: value, actual_weight: "10", volume_weight: "12", charge_weight: "11" };
+    }
+  });
+  t.after(() => server.close());
+  const response = await request(server, { waybillNumbers: ["MO10082215"] }, "/api/workflows/weight-validation");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.workflowId, "weight_validation");
+  assert.equal(response.body.items[0].validationStatus, "anomaly");
 });
 
 test("runs the controlled assistant tool without inventing data", async (t) => {

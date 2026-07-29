@@ -9,6 +9,7 @@ const { runBillingWeightWorkflow } = require("./billing-weight-workflow");
 const { runShipmentTrackingWorkflow } = require("./shipment-tracking-workflow");
 const { runBillingQueryWorkflow } = require("./billing-query-workflow");
 const { listWorkflowDefinitions } = require("./workflow-definitions");
+const { runWeightValidationWorkflow } = require("./weight-validation-workflow");
 const { handleAssistantMessage } = require("./assistant-service");
 
 const MAX_BATCH_RESULTS = 50;
@@ -177,6 +178,24 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false, 
       }
     }
 
+    if (request.method === "POST" && request.url === "/api/workflows/weight-validation") {
+      const startedAt = Date.now();
+      try {
+        const body = await readJson(request);
+        const parsed = parseWaybillNumbers(body.waybillNumbers);
+        const result = await lookupWaybills(body.waybillNumbers, provider);
+        if (result.status !== "completed") {
+          recordRun(runStore, user, "weight_validation", result.status, startedAt, 0);
+          return sendJson(response, 400, result);
+        }
+        recordRun(runStore, user, "weight_validation", "completed", startedAt, parsed.waybillNumbers.length);
+        const protectedResults = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
+        return sendJson(response, 200, runWeightValidationWorkflow(protectedResults));
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input", items: [] });
+      }
+    }
+
     if (request.method === "POST" && request.url === "/api/assistant/message") {
       const startedAt = Date.now();
       try {
@@ -206,6 +225,12 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false, 
             const result = await lookupWaybills(waybillNumbers, provider);
             if (result.status !== "completed") return result;
             return runBillingQueryWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
+          },
+          weightValidation: async (waybillNumbers) => {
+            const parsed = parseWaybillNumbers(waybillNumbers);
+            const result = await lookupWaybills(waybillNumbers, provider);
+            if (result.status !== "completed") return result;
+            return runWeightValidationWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
           }
         });
         recordRun(runStore, user, assistant.tool || "assistant", "completed", startedAt, assistant.waybillNumbers?.length || 0);

@@ -5,7 +5,7 @@ const { listWorkflowDefinitions, getWorkflowDefinition } = require("./workflow-d
 test("lists customer-safe fixed workflow definitions", () => {
   const definitions = listWorkflowDefinitions();
   assert.deepEqual(definitions.map((item) => item.workflowId), [
-    "waybill_lookup", "shipment_tracking", "billing_query", "billing_weight_confirmation"
+    "waybill_lookup", "shipment_tracking", "billing_query", "billing_weight_confirmation", "weight_validation"
   ]);
   assert.equal(definitions.every((item) => item.readOnly), true);
   assert.equal(Object.hasOwn(definitions[0], "handler"), false);

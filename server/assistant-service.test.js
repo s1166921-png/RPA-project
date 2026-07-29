@@ -22,6 +22,10 @@ test("routes fee questions to the fixed billing query workflow", () => {
   assert.equal(interpretAssistantMessage("查 MO10082215 的账单费用").intent, "billing_query");
 });
 
+test("routes weight questions to the fixed validation workflow", () => {
+  assert.equal(interpretAssistantMessage("查 MO10082215 的计重").intent, "weight_validation");
+});
+
 test("asks for a waybill instead of querying when the parameter is missing", () => {
   assert.deepEqual(interpretAssistantMessage("帮我查一下物流"), { intent: "need_waybill", waybillNumbers: [] });
 });

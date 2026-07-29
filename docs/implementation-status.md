@@ -7,6 +7,7 @@
 - Billing-weight confirmation workflow with fee/no-fee branches. No WeCom send and no label mutation.
 - Shipment tracking workflow with current status, last route, route nodes, source, and query time.
 - Per-waybill billing query workflow sourced from the standardized receivable field.
+- Weight validation workflow for actual, volume, and chargeable-weight consistency checks.
 - AI assistant with deterministic intent routing to fixed tools. It does not invent business data.
 - Optional customer login with signed short-lived token and customer-code tenant isolation.
 - Server-side export re-query, so submitted client result objects cannot define exported business values.

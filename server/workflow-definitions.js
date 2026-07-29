@@ -26,6 +26,13 @@ const DEFINITIONS = [
     description: "按费用分支生成客户确认内容，不发送消息。",
     requiredInputs: ["waybillNumbers"],
     readOnly: true
+  },
+  {
+    workflowId: "weight_validation",
+    name: "货物计重校验",
+    description: "校验实重、材重和收费重的基础关系。",
+    requiredInputs: ["waybillNumbers"],
+    readOnly: true
   }
 ];
 
