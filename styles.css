@@ -134,6 +134,19 @@ textarea {
 .workflow-message-item { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
 .workflow-message-item pre { margin: 10px 0 0; white-space: pre-wrap; font: inherit; line-height: 1.65; }
 
+.login-panel {
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 20px;
+}
+
+.login-panel h2 { margin: 0; font-size: 20px; }
+.login-form { display: grid; gap: 10px; margin-top: 16px; max-width: 420px; }
+.login-form label { font-weight: 700; }
+.login-form input { min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+
 .assistant-panel {
   margin-top: 18px;
   border: 1px solid var(--line);

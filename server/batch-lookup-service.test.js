@@ -51,3 +51,21 @@ test("looks up sequentially and preserves mixed results after a source failure",
   assert.equal(result.results[0].shipment.waybillNumber, "MO1");
   assert.equal(result.results[2].shipment.waybillNumber, "MO3");
 });
+
+test("looks up a batch with bounded concurrency", async () => {
+  const started = [];
+  const provider = {
+    async findByWaybill(waybillNumber) {
+      started.push(waybillNumber);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return { waybill_number: waybillNumber };
+    }
+  };
+  const began = Date.now();
+  const result = await lookupWaybills(["MO1", "MO2", "MO3"], provider, undefined, { concurrency: 3 });
+  const elapsed = Date.now() - began;
+  assert.equal(result.status, "completed");
+  assert.deepEqual(result.results.map((item) => item.status), ["found", "found", "found"]);
+  assert.deepEqual(started, ["MO1", "MO2", "MO3"]);
+  assert.ok(elapsed < 220, `expected concurrent lookup, took ${elapsed}ms`);
+});

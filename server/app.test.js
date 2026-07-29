@@ -3,14 +3,15 @@ const http = require("node:http");
 const test = require("node:test");
 
 const { createServer } = require("./app");
+const { createAuthService, hashPassword } = require("./auth-service");
 
-async function start(provider) {
-  const server = createServer({ provider, staticRoot: __dirname + "/.." });
+async function start(provider, options = {}) {
+  const server = createServer({ provider, staticRoot: __dirname + "/..", ...options });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   return server;
 }
 
-async function request(server, body, pathname = "/api/shipments/lookup") {
+async function request(server, body, pathname = "/api/shipments/lookup", extraHeaders = {}) {
   const address = server.address();
   return new Promise((resolve, reject) => {
     const req = http.request({
@@ -18,7 +19,7 @@ async function request(server, body, pathname = "/api/shipments/lookup") {
       port: address.port,
       path: pathname,
       method: "POST",
-      headers: { "content-type": "application/json" }
+      headers: { "content-type": "application/json", ...extraHeaders }
     }, (res) => {
       let text = "";
       res.on("data", (chunk) => { text += chunk; });
@@ -29,7 +30,14 @@ async function request(server, body, pathname = "/api/shipments/lookup") {
   });
 }
 
-async function download(server, body, pathname) {
+function authForTests() {
+  return createAuthService({
+    secret: "test-secret",
+    users: [{ username: "client-a", passwordHash: hashPassword("pass-a"), tenantId: "tenant-a", allowedCustomerCodes: ["CUST-A"] }]
+  });
+}
+
+async function download(server, body, pathname, extraHeaders = {}) {
   const address = server.address();
   return new Promise((resolve, reject) => {
     const req = http.request({
@@ -37,7 +45,7 @@ async function download(server, body, pathname) {
       port: address.port,
       path: pathname,
       method: "POST",
-      headers: { "content-type": "application/json" }
+      headers: { "content-type": "application/json", ...extraHeaders }
     }, (res) => {
       const chunks = [];
       res.on("data", (chunk) => chunks.push(chunk));
@@ -52,6 +60,33 @@ async function download(server, body, pathname) {
     req.end(JSON.stringify(body));
   });
 }
+
+test("requires login and masks another tenant's shipment", async (t) => {
+  const auth = authForTests();
+  const server = await start({
+    async findByWaybill(value) {
+      return { waybill_number: value, customer_code: value === "MO-A" ? "CUST-A" : "CUST-B" };
+    }
+  }, { auth, requireAuth: true });
+  t.after(() => server.close());
+
+  const anonymous = await request(server, { waybillNumber: "MO-A" });
+  assert.equal(anonymous.status, 401);
+  const login = await request(server, { username: "client-a", password: "pass-a" }, "/api/auth/login");
+  assert.equal(login.status, 200);
+  const headers = { authorization: `Bearer ${login.body.token}` };
+
+  const own = await request(server, { waybillNumber: "MO-A" }, "/api/shipments/lookup", headers);
+  assert.equal(own.status, 200);
+  const other = await request(server, { waybillNumber: "MO-B" }, "/api/shipments/lookup", headers);
+  assert.equal(other.status, 404);
+  assert.equal(other.body.status, "not_found");
+
+  const crossTenantExport = await download(server, {
+    results: [{ status: "found", shipment: { waybillNumber: "MO-B", customerCode: "CUST-B" } }]
+  }, "/api/exports/batch-waybills", headers);
+  assert.equal(crossTenantExport.status, 404);
+});
 
 test("runs a batch lookup and retains found and missing statuses", async (t) => {
   const server = await start({

@@ -18,6 +18,7 @@ function normalize(row, queriedAt) {
   return {
     waybillNumber: value(row, "waybill_number", "shipment_number", "waybillNo"),
     fbaNumber: value(row, "fba_number", "fbaNo"),
+    customerCode: value(row, "customer_code", "customerCode", "user_code", "username", "user_name"),
     status: value(row, "status", "shipment_status"),
     service: value(row, "service"),
     country: value(row, "country", "to_country"),

@@ -1,6 +1,7 @@
 const { lookupWaybill } = require("./lookup-service");
 
 const DEFAULT_MAX_ITEMS = 50;
+const DEFAULT_CONCURRENCY = 5;
 
 function parseWaybillNumbers(input, maxItems = DEFAULT_MAX_ITEMS) {
   const rawInput = Array.isArray(input) ? input.join(" ") : String(input ?? "");
@@ -21,16 +22,26 @@ function parseWaybillNumbers(input, maxItems = DEFAULT_MAX_ITEMS) {
   return { status: "valid", waybillNumbers };
 }
 
-async function lookupWaybills(input, provider, now) {
+async function lookupWaybills(input, provider, now, options = {}) {
   const parsed = parseWaybillNumbers(input);
   if (parsed.status !== "valid") {
     return { status: parsed.status, results: [] };
   }
 
-  const results = [];
-  for (const waybillNumber of parsed.waybillNumbers) {
-    results.push(await lookupWaybill({ waybillNumber }, provider, now));
+  const concurrency = Math.max(1, Math.min(
+    parsed.waybillNumbers.length,
+    Number(options.concurrency || DEFAULT_CONCURRENCY)
+  ));
+  const results = Array(parsed.waybillNumbers.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < parsed.waybillNumbers.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await lookupWaybill({ waybillNumber: parsed.waybillNumbers[index] }, provider, now);
+    }
   }
+  await Promise.all(Array.from({ length: concurrency }, worker));
 
   return { status: "completed", results };
 }

@@ -4,8 +4,74 @@ const result = document.querySelector("#lookupResult");
 const assistantForm = document.querySelector("#assistantForm");
 const assistantMessage = document.querySelector("#assistantMessage");
 const assistantResult = document.querySelector("#assistantResult");
+const loginPanel = document.querySelector("#loginPanel");
+const loginForm = document.querySelector("#loginForm");
+const loginUsername = document.querySelector("#loginUsername");
+const loginPassword = document.querySelector("#loginPassword");
+const loginStatus = document.querySelector("#loginStatus");
+const logoutButton = document.querySelector("#logoutButton");
 let currentBatch = [];
 let currentInput = "";
+let authToken = sessionStorage.getItem("portalAuthToken") || "";
+
+function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (authToken) headers.set("authorization", `Bearer ${authToken}`);
+  return fetch(url, { ...options, headers });
+}
+
+function showLoginRequired() {
+  if (loginPanel) loginPanel.hidden = false;
+  if (loginStatus) loginStatus.textContent = "请先登录后查询。";
+}
+
+async function initializeAuth() {
+  try {
+    const response = await fetch("/api/auth/config");
+    const config = await response.json();
+    if (!config.enabled || !loginPanel) return;
+    loginPanel.hidden = false;
+    if (authToken) {
+      loginStatus.textContent = "已登录，可查询所属客户数据。";
+      logoutButton.hidden = false;
+      loginForm.hidden = true;
+    }
+  } catch {
+    // Direct lookup mode can continue when the optional auth config is unavailable.
+  }
+}
+
+initializeAuth();
+
+loginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  loginStatus.textContent = "正在登录…";
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: loginUsername.value, password: loginPassword.value })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error("invalid credentials");
+    authToken = payload.token;
+    sessionStorage.setItem("portalAuthToken", authToken);
+    loginStatus.textContent = "登录成功，可查询所属客户数据。";
+    loginForm.hidden = true;
+    logoutButton.hidden = false;
+    loginPassword.value = "";
+  } catch {
+    loginStatus.textContent = "账号或密码不正确，请重试。";
+  }
+});
+
+logoutButton?.addEventListener("click", () => {
+  authToken = "";
+  sessionStorage.removeItem("portalAuthToken");
+  loginForm.hidden = false;
+  logoutButton.hidden = true;
+  loginStatus.textContent = "已退出登录。";
+});
 
 function setMessage(message, className = "") {
   result.innerHTML = "";
@@ -96,7 +162,7 @@ function renderBatch(batch) {
 
 async function runBillingWeightWorkflow() {
   try {
-    const response = await fetch("/api/workflows/billing-weight-confirmation", {
+    const response = await apiFetch("/api/workflows/billing-weight-confirmation", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ waybillNumbers: [currentInput] })
@@ -126,7 +192,7 @@ async function runBillingWeightWorkflow() {
 
 async function downloadBatchExport() {
   try {
-    const response = await fetch("/api/exports/batch-waybills", {
+    const response = await apiFetch("/api/exports/batch-waybills", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ results: currentBatch })
@@ -186,12 +252,13 @@ assistantForm?.addEventListener("submit", async (event) => {
   }
   assistantResult.textContent = "正在理解你的需求并调用只读工作流…";
   try {
-    const response = await fetch("/api/assistant/message", {
+    const response = await apiFetch("/api/assistant/message", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ message })
     });
     const payload = await response.json();
+    if (response.status === 401) return showLoginRequired();
     if (!response.ok) throw new Error("assistant request failed");
     renderAssistantResult(payload);
   } catch {
@@ -211,12 +278,13 @@ form.addEventListener("submit", async (event) => {
   currentInput = rawInput;
   setMessage(`正在查询 ${count} 个单号...`);
   try {
-    const response = await fetch("/api/shipments/batch-lookup", {
+    const response = await apiFetch("/api/shipments/batch-lookup", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ waybillNumbers: [rawInput] })
     });
     const payload = await response.json();
+    if (response.status === 401) return showLoginRequired();
     if (payload.status === "completed") {
       currentBatch = payload.results;
       return renderBatch(currentBatch);

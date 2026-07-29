@@ -13,6 +13,20 @@
         <span>只读查询</span>
       </header>
 
+      <section id="loginPanel" class="login-panel" hidden aria-labelledby="loginTitle">
+        <p class="eyebrow">客户登录</p>
+        <h2 id="loginTitle">登录后查询所属客户数据</h2>
+        <form id="loginForm" class="login-form">
+          <label for="loginUsername">账号</label>
+          <input id="loginUsername" autocomplete="username" required />
+          <label for="loginPassword">密码</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required />
+          <button type="submit">登录</button>
+        </form>
+        <p id="loginStatus" class="input-hint" aria-live="polite"></p>
+        <button id="logoutButton" type="button" hidden>退出登录</button>
+      </section>
+
       <section class="lookup-panel" aria-labelledby="pageTitle">
         <p class="eyebrow">批量运单查询</p>
         <h1 id="pageTitle">输入多个单号，统一查看结果</h1>

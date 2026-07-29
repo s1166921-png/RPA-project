@@ -38,11 +38,44 @@ function isValidBatchExportResult(result) {
   return ["not_found", "source_unavailable"].includes(result.status) && Boolean(result.waybillNumber);
 }
 
-function createServer({ provider, staticRoot }) {
+function bearerToken(request) {
+  const header = request.headers.authorization || "";
+  return header.startsWith("Bearer ") ? header.slice(7) : "";
+}
+
+function protectResult(result, user, auth) {
+  if (!user || result.status !== "found" || auth.canAccess(user, result.shipment)) return result;
+  return { status: "not_found", waybillNumber: result.shipment.waybillNumber };
+}
+
+function createServer({ provider, staticRoot, auth = null, requireAuth = false }) {
   return http.createServer(async (request, response) => {
+    if (request.method === "POST" && request.url === "/api/auth/login") {
+      try {
+        if (!auth) return sendJson(response, 503, { status: "auth_unavailable" });
+        const body = await readJson(request);
+        const result = auth.login(body.username, body.password);
+        return result
+          ? sendJson(response, 200, { status: "authenticated", ...result })
+          : sendJson(response, 401, { status: "invalid_credentials" });
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input" });
+      }
+    }
+
+    if (request.method === "GET" && request.url === "/api/auth/config") {
+      return sendJson(response, 200, { enabled: requireAuth });
+    }
+
+    let user = null;
+    if (requireAuth && request.url.startsWith("/api/")) {
+      user = auth?.verify(bearerToken(request));
+      if (!user) return sendJson(response, 401, { status: "authentication_required" });
+    }
+
     if (request.method === "POST" && request.url === "/api/shipments/lookup") {
       try {
-        const result = await lookupWaybill(await readJson(request), provider);
+        const result = protectResult(await lookupWaybill(await readJson(request), provider), user, auth);
         const status = { found: 200, invalid_input: 400, not_found: 404, source_unavailable: 502 }[result.status];
         return sendJson(response, status, result);
       } catch {
@@ -58,7 +91,7 @@ function createServer({ provider, staticRoot }) {
         if (result.status !== "completed") return sendJson(response, 400, result);
         return sendJson(response, 200, {
           status: result.status,
-          results: addRequestedWaybillNumbers(result.results, parsed.waybillNumbers)
+          results: addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers)
         });
       } catch {
         return sendJson(response, 400, { status: "invalid_input", results: [] });
@@ -71,7 +104,7 @@ function createServer({ provider, staticRoot }) {
         const parsed = parseWaybillNumbers(body.waybillNumbers);
         const result = await lookupWaybills(body.waybillNumbers, provider);
         if (result.status !== "completed") return sendJson(response, 400, result);
-        return sendJson(response, 200, runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results, parsed.waybillNumbers)));
+        return sendJson(response, 200, runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers)));
       } catch {
         return sendJson(response, 400, { status: "invalid_input", items: [] });
       }
@@ -85,14 +118,14 @@ function createServer({ provider, staticRoot }) {
             const parsed = parseWaybillNumbers(waybillNumbers);
             const result = await lookupWaybills(waybillNumbers, provider);
             return result.status === "completed"
-              ? { ...result, results: addRequestedWaybillNumbers(result.results, parsed.waybillNumbers) }
+              ? { ...result, results: addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers) }
               : result;
           },
           billing: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
             const result = await lookupWaybills(waybillNumbers, provider);
             if (result.status !== "completed") return result;
-            return runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results, parsed.waybillNumbers));
+            return runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers));
           }
         });
         return sendJson(response, 200, assistant);
@@ -103,7 +136,7 @@ function createServer({ provider, staticRoot }) {
 
     if (request.method === "POST" && request.url === "/api/exports/waybill") {
       try {
-        const result = await lookupWaybill(await readJson(request), provider);
+        const result = protectResult(await lookupWaybill(await readJson(request), provider), user, auth);
         if (result.status !== "found") {
           const status = { invalid_input: 400, not_found: 404, source_unavailable: 502 }[result.status];
           return sendJson(response, status, result);
@@ -129,6 +162,9 @@ function createServer({ provider, staticRoot }) {
       }
       if (!Array.isArray(body.results) || body.results.length === 0 || body.results.length > MAX_BATCH_RESULTS || !body.results.every(isValidBatchExportResult)) {
         return sendJson(response, 400, { status: "invalid_input" });
+      }
+      if (requireAuth && body.results.some((item) => item.status === "found" && !auth.canAccess(user, item.shipment))) {
+        return sendJson(response, 404, { status: "not_found" });
       }
       try {
         const file = await createXlsxExport(buildBatchExportRows(body.results));
