@@ -118,6 +118,20 @@ test("runs the read-only billing weight confirmation workflow", async (t) => {
   assert.match(response.body.items[0].message, /运费：7.60\/KG/);
 });
 
+test("runs the read-only shipment tracking workflow", async (t) => {
+  const server = await start({
+    async findByWaybill(value) {
+      return { shipment_number: value, status: "运输中", last_route: "已出库", route_nodes: [{ event_time: "2026-07-29", place: "仓库", description: "已出库" }] };
+    }
+  });
+  t.after(() => server.close());
+  const response = await request(server, { waybillNumbers: ["MO10082215"] }, "/api/workflows/shipment-tracking");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.workflowId, "shipment_tracking");
+  assert.equal(response.body.items[0].currentStatus, "运输中");
+  assert.equal(response.body.items[0].routeNodes[0].location, "仓库");
+});
+
 test("runs the controlled assistant tool without inventing data", async (t) => {
   const server = await start({ async findByWaybill(value) { return { waybill_number: value, sell_charge_amount: "0.00CNY" }; } });
   t.after(() => server.close());

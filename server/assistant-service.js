@@ -10,7 +10,9 @@ function interpretAssistantMessage(message) {
   if (!waybillNumbers.length) return { intent: "need_waybill", waybillNumbers: [] };
   const text = String(message || "");
   return {
-    intent: /计费重|收费重|未发/.test(text) ? "billing_weight_confirmation" : "waybill_lookup",
+    intent: /计费重|收费重|未发/.test(text)
+      ? "billing_weight_confirmation"
+      : /物流|轨迹|状态/.test(text) ? "shipment_tracking" : "waybill_lookup",
     waybillNumbers
   };
 }
@@ -30,6 +32,15 @@ async function handleAssistantMessage(message, tools) {
   if (interpretation.intent === "billing_weight_confirmation") {
     const workflow = await tools.billing(interpretation.waybillNumbers);
     return { ...interpretation, tool: "billingWeightConfirmation", ...workflow, reply: "已调用计费重确认工作流，内容以工作流返回结果为准。" };
+  }
+  if (interpretation.intent === "shipment_tracking") {
+    const tracking = await tools.tracking(interpretation.waybillNumbers);
+    return {
+      ...interpretation,
+      tool: "shipmentTracking",
+      ...tracking,
+      reply: "已调用物流轨迹工作流，状态和节点以系统查询结果为准。"
+    };
   }
   const lookup = await tools.lookup(interpretation.waybillNumbers);
   return { ...interpretation, tool: "batchLookup", ...lookup, reply: lookupReply(lookup.results || []) };

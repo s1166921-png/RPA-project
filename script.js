@@ -223,6 +223,48 @@ function renderAssistantResult(payload) {
     renderBatch(currentBatch);
   }
 
+  if (payload.workflowId === "shipment_tracking" && Array.isArray(payload.items)) {
+    const panel = document.createElement("section");
+    panel.className = "workflow-message tracking-message";
+    const heading = document.createElement("h3");
+    heading.textContent = `${payload.name}（只读结果）`;
+    panel.append(heading);
+    payload.items.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "workflow-message-item tracking-item";
+      card.dataset.waybill = item.waybillNumber;
+      const title = document.createElement("strong");
+      title.textContent = `${item.waybillNumber} · ${displayStatus(item.status)}`;
+      card.append(title);
+      if (item.status === "found") {
+        const summary = document.createElement("p");
+        summary.textContent = `当前状态：${item.currentStatus || ""}；最后轨迹：${item.lastRoute || ""}`;
+        card.append(summary);
+        if (item.routeNodes.length) {
+          const nodes = document.createElement("ol");
+          nodes.className = "tracking-nodes";
+          item.routeNodes.forEach((node) => {
+            const entry = document.createElement("li");
+            entry.textContent = [node.time, node.location, node.status].filter(Boolean).join(" · ");
+            nodes.append(entry);
+          });
+          card.append(nodes);
+        }
+        const source = document.createElement("small");
+        source.textContent = `来源：${item.source}；查询时间：${item.queriedAt}`;
+        card.append(source);
+      } else {
+        const reason = document.createElement("p");
+        reason.className = "batch-reason";
+        reason.textContent = displayReason(item.status);
+        card.append(reason);
+      }
+      panel.append(card);
+    });
+    assistantResult.append(panel);
+    return;
+  }
+
   if (Array.isArray(payload.items)) {
     const panel = document.createElement("section");
     panel.className = "workflow-message";

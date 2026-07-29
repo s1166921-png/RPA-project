@@ -54,6 +54,10 @@ async function run() {
     await page.locator("#assistantForm button").click();
     await page.waitForFunction(() => document.querySelector("#assistantResult").innerText.includes("请提供一个或多个运单号"));
 
+    await page.locator("#assistantMessage").fill("MO10083334 \u7269\u6d41\u8f68\u8ff9");
+    await page.locator("#assistantForm button").click();
+    await page.locator('.tracking-item[data-waybill="MO10083334"]').waitFor();
+
     await page.locator("#waybillNumbers").fill("");
     await page.locator("#lookupForm button").click();
     await expectText(page, "#lookupResult", "\u8bf7\u8f93\u5165\u8fd0\u5355\u53f7");

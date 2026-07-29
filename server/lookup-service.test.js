@@ -30,6 +30,15 @@ test("returns a standardized shipment from the provider", async () => {
   assert.equal(result.shipment.queriedAt, "2026-07-28T08:00:00.000Z");
 });
 
+test("normalizes read-only route nodes when the source provides them", async () => {
+  const result = await lookupWaybill({ waybillNumber: "MO1" }, {
+    async findByWaybill() {
+      return { waybill_number: "MO1", route_nodes: [{ event_time: "2026-07-29", place: "仓库", description: "已出库" }] };
+    }
+  });
+  assert.deepEqual(result.shipment.routeNodes, [{ time: "2026-07-29", location: "仓库", status: "已出库" }]);
+});
+
 test("converts New Wisdom display fragments into plain text", async () => {
   const result = await lookupWaybill({ waybillNumber: "MO10068327" }, {
     async findByWaybill() {

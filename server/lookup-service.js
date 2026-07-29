@@ -14,6 +14,20 @@ function value(row, ...keys) {
   return "";
 }
 
+function routeNodes(row) {
+  const raw = ["route_nodes", "routeNodes", "routes", "tracking_events", "trackingEvents"]
+    .map((key) => row[key])
+    .find(Array.isArray) || [];
+  return raw.map((node) => {
+    if (node == null || typeof node !== "object") return { description: plainText(node || "") };
+    return {
+      time: value(node, "time", "event_time", "occurred_at", "date"),
+      location: value(node, "location", "place", "city"),
+      status: value(node, "status", "event", "description")
+    };
+  });
+}
+
 function normalize(row, queriedAt) {
   return {
     waybillNumber: value(row, "waybill_number", "shipment_number", "waybillNo"),
@@ -30,6 +44,7 @@ function normalize(row, queriedAt) {
     customsMode: value(row, "customs_mode", "customsMode"),
     receivable: value(row, "receivable", "sell_charge_amount"),
     lastRoute: value(row, "last_route", "last_tracking", "lastRoute"),
+    routeNodes: routeNodes(row),
     source: "新智慧运单接口",
     queriedAt: queriedAt.toISOString()
   };
