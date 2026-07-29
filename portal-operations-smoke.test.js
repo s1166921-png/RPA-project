@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { chromium } = require("playwright");
 const { createServer } = require("./server/app");
 const { createAuthService, hashPassword } = require("./server/auth-service");
-const { createTenantMappingStore } = require("./server/tenant-mapping-store");
+const { createSqliteStores } = require("./server/sqlite-stores");
 
 async function login(page, username, password) {
   await page.locator("#loginUsername").fill(username);
@@ -11,6 +11,7 @@ async function login(page, username, password) {
 }
 
 async function run() {
+  const stores = createSqliteStores();
   const auth = createAuthService({
     secret: "operations-portal-secret",
     users: [
@@ -22,7 +23,8 @@ async function run() {
     staticRoot: __dirname,
     auth,
     requireAuth: true,
-    tenantMappings: createTenantMappingStore(),
+    runStore: stores.runStore,
+    tenantMappings: stores.tenantMappings,
     provider: { async findByWaybill() { return null; } }
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -48,6 +50,7 @@ async function run() {
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
+    stores.close();
   }
 }
 

@@ -1,3 +1,4 @@
+const fs = require("node:fs");
 const path = require("node:path");
 const { createServer } = require("./app");
 const { createSampleProvider } = require("./providers/sample-provider");
@@ -5,8 +6,8 @@ const { createNewWisdomProvider } = require("./providers/new-wisdom-provider");
 const { createCachedProvider } = require("./provider-cache");
 const { createAuthService, loadUsers } = require("./auth-service");
 const { createAuditedProvider } = require("./audit-log");
-const { createWorkflowRunStore } = require("./workflow-run-store");
-const { createTenantMappingStore, loadTenantMappings } = require("./tenant-mapping-store");
+const { loadTenantMappings } = require("./tenant-mapping-store");
+const { createSqliteStores } = require("./sqlite-stores");
 const { getListenOptions } = require("./server-config");
 
 const { port, host } = getListenOptions();
@@ -26,8 +27,15 @@ const provider = createCachedProvider(auditedProvider, {
   ttlMs: Number(process.env.LOOKUP_CACHE_TTL_MS || 30_000),
   maxEntries: Number(process.env.LOOKUP_CACHE_MAX_ENTRIES || 1_000)
 });
-const runStore = createWorkflowRunStore();
-const tenantMappings = createTenantMappingStore(loadTenantMappings(process.env.TENANT_MAPPINGS_JSON || "[]"));
+const databasePath = process.env.PORTAL_DB_PATH || path.resolve(__dirname, "..", "data", "portal.sqlite");
+fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+const stores = createSqliteStores({ filename: databasePath });
+loadTenantMappings(process.env.TENANT_MAPPINGS_JSON || "[]").forEach((mapping) => {
+  if (!stores.tenantMappings.get(mapping.tenantId)) {
+    stores.tenantMappings.upsert(mapping.tenantId, mapping);
+  }
+});
+const { runStore, tenantMappings } = stores;
 const auth = requireAuth
   ? createAuthService({
       secret: process.env.AUTH_TOKEN_SECRET,
@@ -35,4 +43,5 @@ const auth = requireAuth
     })
   : null;
 const server = createServer({ provider, auth, requireAuth, runStore, tenantMappings, staticRoot: path.resolve(__dirname, "..") });
+server.once("close", () => stores.close());
 server.listen(port, host, () => console.log(`Waybill portal: http://${host}:${port}`));
