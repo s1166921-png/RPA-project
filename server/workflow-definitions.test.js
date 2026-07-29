@@ -9,6 +9,10 @@ test("lists customer-safe fixed workflow definitions", () => {
   ]);
   assert.equal(definitions.every((item) => item.readOnly), true);
   assert.equal(Object.hasOwn(definitions[0], "handler"), false);
+  assert.deepEqual(definitions[0].dataSources, ["new_wisdom_shipment", "short_cache"]);
+  assert.deepEqual(definitions[3].outputTypes, ["portal_result", "xlsx_export", "async_export"]);
+  definitions[0].validationRules.push("mutated");
+  assert.equal(listWorkflowDefinitions()[0].validationRules.includes("mutated"), false);
 });
 
 test("returns a copy of one definition", () => {

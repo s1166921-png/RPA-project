@@ -15,6 +15,7 @@ async function run() {
     await page.locator(".workflow-definition").nth(4).waitFor();
     assert.equal(await page.locator(".workflow-definition").count(), 6);
     assert.match(await page.locator("#workflowCatalog").innerText(), /物流轨迹查询/);
+    assert.match(await page.locator("#workflowCatalog").innerText(), /所需输入：waybillNumbers；输出：portal_result, xlsx_export/);
     console.log(JSON.stringify({ workflowCatalogUserPath: "passed", fixedWorkflows: 6 }));
   } finally {
     await browser.close();

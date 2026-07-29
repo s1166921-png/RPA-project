@@ -96,7 +96,9 @@ async function loadWorkflowCatalog() {
       description.textContent = workflow.description;
       const mode = document.createElement("small");
       mode.textContent = workflow.readOnly ? "只读工作流" : "需审批";
-      item.append(title, description, mode);
+      const inputs = document.createElement("small");
+      inputs.textContent = `所需输入：${workflow.requiredInputs.join(", ")}；输出：${workflow.outputTypes.join(", ")}`;
+      item.append(title, description, mode, inputs);
       workflowCatalog.append(item);
     });
   } catch {
