@@ -2,7 +2,8 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { lookupWaybill } = require("./lookup-service");
-const { buildExportRows } = require("./export-service");
+const { lookupWaybills, parseWaybillNumbers } = require("./batch-lookup-service");
+const { buildExportRows, buildBatchExportRows } = require("./export-service");
 const { createXlsxExport } = require("./export-workbook");
 
 function sendJson(response, status, body) {
@@ -21,6 +22,18 @@ function readJson(request) {
   });
 }
 
+function addRequestedWaybillNumbers(results, waybillNumbers) {
+  return results.map((result, index) => result.status === "found"
+    ? result
+    : { ...result, waybillNumber: waybillNumbers[index] });
+}
+
+function isValidBatchExportResult(result) {
+  if (!result || typeof result !== "object") return false;
+  if (result.status === "found") return Boolean(result.shipment && result.shipment.waybillNumber);
+  return ["not_found", "source_unavailable"].includes(result.status) && Boolean(result.waybillNumber);
+}
+
 function createServer({ provider, staticRoot }) {
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/shipments/lookup") {
@@ -30,6 +43,21 @@ function createServer({ provider, staticRoot }) {
         return sendJson(response, status, result);
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
+      }
+    }
+
+    if (request.method === "POST" && request.url === "/api/shipments/batch-lookup") {
+      try {
+        const body = await readJson(request);
+        const parsed = parseWaybillNumbers(body.waybillNumbers);
+        const result = await lookupWaybills(body.waybillNumbers, provider);
+        if (result.status !== "completed") return sendJson(response, 400, result);
+        return sendJson(response, 200, {
+          status: result.status,
+          results: addRequestedWaybillNumbers(result.results, parsed.waybillNumbers)
+        });
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input", results: [] });
       }
     }
 
@@ -44,6 +72,29 @@ function createServer({ provider, staticRoot }) {
         response.writeHead(200, {
           "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "content-disposition": `attachment; filename="waybill-${result.shipment.waybillNumber}.xlsx"`,
+          "cache-control": "no-store"
+        });
+        return response.end(file);
+      } catch {
+        return sendJson(response, 502, { status: "source_unavailable" });
+      }
+    }
+
+    if (request.method === "POST" && request.url === "/api/exports/batch-waybills") {
+      let body;
+      try {
+        body = await readJson(request);
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input" });
+      }
+      if (!Array.isArray(body.results) || body.results.length === 0 || !body.results.every(isValidBatchExportResult)) {
+        return sendJson(response, 400, { status: "invalid_input" });
+      }
+      try {
+        const file = await createXlsxExport(buildBatchExportRows(body.results));
+        response.writeHead(200, {
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "content-disposition": `attachment; filename="waybill-batch-${Date.now()}.xlsx"`,
           "cache-control": "no-store"
         });
         return response.end(file);

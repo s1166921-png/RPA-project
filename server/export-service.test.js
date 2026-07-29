@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { buildExportRows } = require("./export-service");
+const { buildExportRows, buildBatchExportRows } = require("./export-service");
 
 test("builds the fixed billing-weight export columns in workflow order", () => {
   const rows = buildExportRows([{
@@ -22,4 +22,34 @@ test("builds the fixed billing-weight export columns in workflow order", () => {
 
   assert.deepEqual(rows[0], ["运单号", "FBA号", "服务", "国家", "收件人", "件数", "实重", "材重", "收费重", "应收", "费用分支", "报关方式", "数据来源", "查询时间"]);
   assert.deepEqual(rows[1].slice(0, 11), ["MO10083334", "FBA15M2B6V3B", "欧洲空运包税-普货", "法国", "Amazon.com.XCD2", "1", "15.37", "15.35", "21.00", "826.00CNY", "有费用"]);
+});
+
+test("builds batch export rows for found and missing waybills", () => {
+  const rows = buildBatchExportRows([
+    {
+      status: "found",
+      shipment: {
+        waybillNumber: "MO10083334",
+        fbaNumber: "FBA15M2B6V3B",
+        service: "Air",
+        country: "France",
+        recipient: "Recipient",
+        pieces: "1",
+        actualWeight: "15.37",
+        volumeWeight: "15.35",
+        chargeWeight: "21.00",
+        receivable: "826.00CNY",
+        customsMode: "Declaration",
+        source: "New Wisdom",
+        queriedAt: "2026-07-28T08:00:00.000Z"
+      }
+    },
+    { status: "not_found", waybillNumber: "MISSING-1" },
+    { status: "source_unavailable", waybillNumber: "UNAVAILABLE-1" }
+  ]);
+
+  assert.deepEqual(rows[0].slice(-2), ["\u67e5\u8be2\u72b6\u6001", "\u5931\u8d25\u539f\u56e0"]);
+  assert.deepEqual(rows[1].slice(-2), ["\u5df2\u627e\u5230", ""]);
+  assert.deepEqual(rows[2], ["MISSING-1", ...Array(13).fill(""), "\u672a\u627e\u5230", "\u672a\u627e\u5230\u8be5\u8fd0\u5355"]);
+  assert.deepEqual(rows[3], ["UNAVAILABLE-1", ...Array(13).fill(""), "\u6570\u636e\u6e90\u4e0d\u53ef\u7528", "\u65b0\u667a\u6167\u6570\u636e\u6e90\u6682\u65f6\u4e0d\u53ef\u7528"]);
 });

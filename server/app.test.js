@@ -10,24 +10,116 @@ async function start(provider) {
   return server;
 }
 
-async function request(server, body) {
+async function request(server, body, pathname = "/api/shipments/lookup") {
   const address = server.address();
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: "127.0.0.1",
       port: address.port,
-      path: "/api/shipments/lookup",
+      path: pathname,
       method: "POST",
       headers: { "content-type": "application/json" }
     }, (res) => {
       let text = "";
       res.on("data", (chunk) => { text += chunk; });
-      res.on("end", () => resolve({ status: res.statusCode, body: JSON.parse(text) }));
+      res.on("end", () => resolve({ status: res.statusCode, body: text ? JSON.parse(text) : null }));
     });
     req.on("error", reject);
     req.end(JSON.stringify(body));
   });
 }
+
+async function download(server, body, pathname) {
+  const address = server.address();
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      hostname: "127.0.0.1",
+      port: address.port,
+      path: pathname,
+      method: "POST",
+      headers: { "content-type": "application/json" }
+    }, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve({
+        status: res.statusCode,
+        type: res.headers["content-type"],
+        disposition: res.headers["content-disposition"],
+        body: Buffer.concat(chunks)
+      }));
+    });
+    req.on("error", reject);
+    req.end(JSON.stringify(body));
+  });
+}
+
+test("runs a batch lookup and retains found and missing statuses", async (t) => {
+  const server = await start({
+    async findByWaybill(value) {
+      return value === "MO10083334" ? { waybill_number: value } : null;
+    }
+  });
+  t.after(() => server.close());
+
+  const response = await request(server, { waybillNumbers: ["MO10083334", "MISSING-1"] }, "/api/shipments/batch-lookup");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, "completed");
+  assert.deepEqual(response.body.results.map((result) => result.status), ["found", "not_found"]);
+});
+
+test("rejects invalid batch lookup input", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } });
+  t.after(() => server.close());
+
+  const response = await request(server, { waybillNumbers: [] }, "/api/shipments/batch-lookup");
+  assert.equal(response.status, 400);
+  assert.equal(response.body.status, "invalid_input");
+});
+
+test("rejects a batch lookup that exceeds the item limit", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } });
+  t.after(() => server.close());
+  const waybillNumbers = Array.from({ length: 51 }, (_, index) => `MO${index}`);
+
+  const response = await request(server, { waybillNumbers }, "/api/shipments/batch-lookup");
+  assert.equal(response.status, 400);
+  assert.equal(response.body.status, "limit_exceeded");
+});
+
+test("downloads one xlsx file for batch query results", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } });
+  t.after(() => server.close());
+
+  const response = await download(server, {
+    results: [
+      { status: "found", shipment: { waybillNumber: "MO10083334", source: "New Wisdom", queriedAt: "2026-07-28T08:00:00.000Z" } },
+      { status: "not_found", waybillNumber: "MISSING-1" }
+    ]
+  }, "/api/exports/batch-waybills");
+
+  assert.equal(response.status, 200);
+  assert.match(response.type, /spreadsheetml/);
+  assert.match(response.disposition, /^attachment; filename="waybill-batch-\d+\.xlsx"$/);
+  assert.equal(response.body.subarray(0, 2).toString(), "PK");
+});
+
+test("rejects an empty batch export", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } });
+  t.after(() => server.close());
+
+  const response = await request(server, { results: [] }, "/api/exports/batch-waybills");
+  assert.equal(response.status, 400);
+  assert.equal(response.body.status, "invalid_input");
+});
+
+test("rejects a malformed batch export result", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } });
+  t.after(() => server.close());
+
+  const response = await request(server, { results: [{}] }, "/api/exports/batch-waybills");
+  assert.equal(response.status, 400);
+  assert.equal(response.body.status, "invalid_input");
+});
 
 test("serves a waybill lookup through the HTTP API", async (t) => {
   const server = await start({ async findByWaybill() { return { waybill_number: "MO10083334" }; } });
