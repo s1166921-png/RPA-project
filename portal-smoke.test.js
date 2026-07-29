@@ -23,22 +23,23 @@ async function run() {
   const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
   try {
     await page.goto(`http://127.0.0.1:${address.port}`);
-    await page.locator("#waybillNumber").fill("MO10083334");
+    await page.locator("#waybillNumbers").fill("MO10083334\nMISSING-1");
     await page.locator("#lookupForm button").click();
-    await expectResult(page, "MO10083334");
-    await expectText(page, "#lookupResult", "新智慧运单接口");
+    await page.locator('[data-waybill="MO10083334"][data-status="found"]').waitFor();
+    await page.locator('[data-waybill="MISSING-1"][data-status="not_found"]').waitFor();
     const download = page.waitForEvent("download");
-    await page.locator("#downloadExport").click();
-    assert.match((await download).suggestedFilename(), /waybill-MO10083334\.xlsx/);
-    await page.locator("#waybillNumber").fill("");
+    await page.locator("#downloadBatchExport").click();
+    assert.match((await download).suggestedFilename(), /waybill-batch-\d+\.xlsx/);
+
+    await page.locator("#waybillNumbers").fill("");
     await page.locator("#lookupForm button").click();
-    await expectText(page, "#lookupResult", "请输入运单号");
+    await expectText(page, "#lookupResult", "\u8bf7\u8f93\u5165\u8fd0\u5355\u53f7");
 
     const filePath = `file:///${path.resolve(__dirname, "index.html").replace(/\\/g, "/")}`;
     await page.goto(filePath);
-    await page.locator("#waybillNumber").fill("MO10083334");
+    await page.locator("#waybillNumbers").fill("MO10083334");
     await page.locator("#lookupForm button").click();
-    await expectResult(page, "请通过本地服务地址打开页面");
+    await expectResult(page, "\u8bf7\u901a\u8fc7\u672c\u5730\u670d\u52a1\u5730\u5740\u6253\u5f00\u9875\u9762");
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

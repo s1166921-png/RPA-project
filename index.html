@@ -8,17 +8,25 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="topbar"><strong>跨境物流自助查询</strong><span>只读查询</span></header>
-      <section class="lookup-panel">
-        <p class="eyebrow">运单直查</p>
-        <h1>输入单号，查看运输信息</h1>
+      <header class="topbar">
+        <strong>跨境物流自助查询</strong>
+        <span>只读查询</span>
+      </header>
+
+      <section class="lookup-panel" aria-labelledby="pageTitle">
+        <p class="eyebrow">批量运单查询</p>
+        <h1 id="pageTitle">输入多个单号，统一查看结果</h1>
         <form id="lookupForm" class="lookup-form">
-          <label for="waybillNumber">运单号</label>
-          <input id="waybillNumber" autocomplete="off" placeholder="例如：MO10067690" />
-          <button type="submit">查询</button>
+          <label for="waybillNumbers">运单号</label>
+          <textarea id="waybillNumbers" rows="6" autocomplete="off" placeholder="例如：&#10;MO10067690&#10;MO10068327"></textarea>
+          <p id="inputHint" class="input-hint">支持按换行、英文逗号或中文逗号分隔，单次最多 50 个单号。</p>
+          <button type="submit">批量查询</button>
         </form>
       </section>
-      <section id="lookupResult" class="result-panel" aria-live="polite"><p>请输入运单号开始查询。</p></section>
+
+      <section id="lookupResult" class="result-panel" aria-live="polite">
+        <p class="empty">请输入运单号开始查询。</p>
+      </section>
     </main>
     <script src="./script.js"></script>
   </body>

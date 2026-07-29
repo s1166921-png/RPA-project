@@ -1,7 +1,7 @@
 const form = document.querySelector("#lookupForm");
-const input = document.querySelector("#waybillNumber");
+const input = document.querySelector("#waybillNumbers");
 const result = document.querySelector("#lookupResult");
-let currentWaybill = "";
+let currentBatch = [];
 
 function setMessage(message, className = "") {
   result.innerHTML = "";
@@ -11,65 +11,124 @@ function setMessage(message, className = "") {
   result.append(paragraph);
 }
 
-function addField(container, label, value) {
-  const item = document.createElement("div");
-  const key = document.createElement("span");
-  const text = document.createElement("strong");
-  key.textContent = label;
-  text.textContent = value || "-";
-  item.append(key, text);
-  container.append(item);
+function typedEntryCount(value) {
+  return value.split(/[\s,，]+/).map((item) => item.trim()).filter(Boolean).length;
 }
 
-function renderShipment(shipment) {
+function displayStatus(status) {
+  return {
+    found: "已找到",
+    not_found: "未找到",
+    source_unavailable: "数据源暂不可用"
+  }[status] || "查询失败";
+}
+
+function displayReason(status) {
+  return {
+    not_found: "未找到该运单，请核对单号后重试。",
+    source_unavailable: "新智慧数据源暂时不可用，请稍后重试。"
+  }[status] || "查询未完成，请稍后重试。";
+}
+
+function addSummary(item, shipment) {
+  const summary = document.createElement("p");
+  summary.className = "batch-summary";
+  const fields = [shipment.service, shipment.country, shipment.chargeWeight && `收费重 ${shipment.chargeWeight}`].filter(Boolean);
+  summary.textContent = fields.join(" · ") || "已获取运单数据";
+  item.append(summary);
+}
+
+function renderBatch(batch) {
   result.innerHTML = "";
   const heading = document.createElement("div");
   heading.className = "result-heading";
   const title = document.createElement("h2");
-  title.textContent = shipment.waybillNumber;
-  const source = document.createElement("p");
-  source.textContent = `数据来源：${shipment.source} | 查询时间：${new Date(shipment.queriedAt).toLocaleString("zh-CN", { hour12: false })}`;
-  heading.append(title, source);
-  const grid = document.createElement("div");
-  grid.className = "result-grid";
-  [["FBA号", shipment.fbaNumber], ["服务", shipment.service], ["国家", shipment.country], ["收件人", shipment.recipient], ["件数", shipment.pieces], ["实重", shipment.actualWeight], ["材重", shipment.volumeWeight], ["收费重", shipment.chargeWeight], ["应收", shipment.receivable], ["报关方式", shipment.customsMode], ["最后路由", shipment.lastRoute]].forEach(([label, value]) => addField(grid, label, value));
+  title.textContent = `查询完成，共 ${batch.length} 条`;
+  heading.append(title);
+
+  const list = document.createElement("div");
+  list.className = "batch-list";
+  batch.forEach((entry) => {
+    const waybillNumber = entry.waybillNumber || entry.shipment?.waybillNumber || "-";
+    const item = document.createElement("article");
+    item.className = "batch-item";
+    item.dataset.waybill = waybillNumber;
+    item.dataset.status = entry.status;
+
+    const row = document.createElement("div");
+    row.className = "batch-item-main";
+    const number = document.createElement("strong");
+    number.textContent = waybillNumber;
+    const status = document.createElement("span");
+    status.className = `status status-${entry.status}`;
+    status.textContent = displayStatus(entry.status);
+    row.append(number, status);
+    item.append(row);
+
+    if (entry.status === "found") {
+      addSummary(item, entry.shipment);
+    } else {
+      const reason = document.createElement("p");
+      reason.className = "batch-reason";
+      reason.textContent = displayReason(entry.status);
+      item.append(reason);
+    }
+    list.append(item);
+  });
+
   const download = document.createElement("button");
-  download.id = "downloadExport";
+  download.id = "downloadBatchExport";
   download.type = "button";
   download.textContent = "下载 Excel";
-  download.addEventListener("click", downloadExport);
-  result.append(heading, grid, download);
+  download.addEventListener("click", downloadBatchExport);
+  result.append(heading, list, download);
 }
 
-async function downloadExport() {
+async function downloadBatchExport() {
   try {
-    const response = await fetch("/api/exports/waybill", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ waybillNumber: currentWaybill }) });
-    if (!response.ok) return setMessage("导出失败，请稍后重试。", "error");
+    const response = await fetch("/api/exports/batch-waybills", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ results: currentBatch })
+    });
+    if (!response.ok) return setMessage("批量导出失败，请稍后重试。", "error");
     const url = URL.createObjectURL(await response.blob());
+    const disposition = response.headers.get("content-disposition") || "";
+    const filename = disposition.match(/filename="?([^";]+)/)?.[1] || "waybill-batch.xlsx";
     const link = document.createElement("a");
     link.href = url;
-    link.download = `waybill-${currentWaybill}.xlsx`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
   } catch {
-    setMessage("导出失败，请稍后重试。", "error");
+    setMessage("批量导出失败，请稍后重试。", "error");
   }
 }
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  currentWaybill = input.value.trim().toUpperCase();
-  if (!currentWaybill) return setMessage("请输入运单号。", "error");
+  const rawInput = input.value.trim();
+  if (!rawInput) return setMessage("请输入运单号。", "error");
   if (window.location.protocol === "file:") {
     return setMessage("请通过本地服务地址打开页面，例如 http://127.0.0.1:3000。", "error");
   }
-  setMessage("正在查询...");
+
+  const count = typedEntryCount(rawInput);
+  setMessage(`正在查询 ${count} 个单号...`);
   try {
-    const response = await fetch("/api/shipments/lookup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ waybillNumber: currentWaybill }) });
+    const response = await fetch("/api/shipments/batch-lookup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ waybillNumbers: [rawInput] })
+    });
     const payload = await response.json();
-    if (payload.status === "found") return renderShipment(payload.shipment);
-    if (payload.status === "not_found") return setMessage("未找到该运单，请核对单号后再试。", "error");
-    if (payload.status === "source_unavailable") return setMessage("新智慧数据源暂时不可用，请稍后重试。", "error");
+    if (payload.status === "completed") {
+      currentBatch = payload.results;
+      return renderBatch(currentBatch);
+    }
+    if (payload.status === "limit_exceeded") return setMessage("单次最多查询 50 个不同单号。", "error");
+    setMessage("查询失败，请检查输入后重试。", "error");
+  } catch {
     setMessage("查询失败，请稍后重试。", "error");
-  } catch { setMessage("查询失败，请稍后重试。", "error"); }
+  }
 });
