@@ -38,6 +38,9 @@ async function run() {
     await page.locator('[data-waybill="MISSING-1"][data-status="not_found"]').waitFor();
     assert.equal(batchLookupRequests, 1);
     assert.deepEqual(await page.locator(".batch-item").evaluateAll((items) => items.map((item) => item.dataset.waybill)), ["MO10083334", "MISSING-1"]);
+    await page.locator("#billingWeightWorkflow").click();
+    await page.locator(".workflow-message").waitFor();
+    await expectText(page, "#lookupResult", "计费重确认");
     const download = page.waitForEvent("download");
     await page.locator("#downloadBatchExport").click();
     assert.match((await download).suggestedFilename(), /waybill-batch-\d+\.xlsx/);

@@ -5,6 +5,7 @@ const { lookupWaybill } = require("./lookup-service");
 const { lookupWaybills, parseWaybillNumbers } = require("./batch-lookup-service");
 const { buildExportRows, buildBatchExportRows } = require("./export-service");
 const { createXlsxExport } = require("./export-workbook");
+const { runBillingWeightWorkflow } = require("./billing-weight-workflow");
 
 const MAX_BATCH_RESULTS = 50;
 
@@ -60,6 +61,18 @@ function createServer({ provider, staticRoot }) {
         });
       } catch {
         return sendJson(response, 400, { status: "invalid_input", results: [] });
+      }
+    }
+
+    if (request.method === "POST" && request.url === "/api/workflows/billing-weight-confirmation") {
+      try {
+        const body = await readJson(request);
+        const parsed = parseWaybillNumbers(body.waybillNumbers);
+        const result = await lookupWaybills(body.waybillNumbers, provider);
+        if (result.status !== "completed") return sendJson(response, 400, result);
+        return sendJson(response, 200, runBillingWeightWorkflow(addRequestedWaybillNumbers(result.results, parsed.waybillNumbers)));
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input", items: [] });
       }
     }
 

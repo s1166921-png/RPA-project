@@ -2,6 +2,7 @@ const form = document.querySelector("#lookupForm");
 const input = document.querySelector("#waybillNumbers");
 const result = document.querySelector("#lookupResult");
 let currentBatch = [];
+let currentInput = "";
 
 function setMessage(message, className = "") {
   result.innerHTML = "";
@@ -76,12 +77,48 @@ function renderBatch(batch) {
     list.append(item);
   });
 
+  const workflow = document.createElement("button");
+  workflow.id = "billingWeightWorkflow";
+  workflow.type = "button";
+  workflow.textContent = "生成计费重确认";
+  workflow.addEventListener("click", runBillingWeightWorkflow);
+
   const download = document.createElement("button");
   download.id = "downloadBatchExport";
   download.type = "button";
   download.textContent = "下载 Excel";
   download.addEventListener("click", downloadBatchExport);
-  result.append(heading, list, download);
+  result.append(heading, list, workflow, download);
+}
+
+async function runBillingWeightWorkflow() {
+  try {
+    const response = await fetch("/api/workflows/billing-weight-confirmation", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ waybillNumbers: [currentInput] })
+    });
+    if (!response.ok) return setMessage("计费重确认生成失败，请稍后重试。", "error");
+    const payload = await response.json();
+    const panel = document.createElement("section");
+    panel.className = "workflow-message";
+    const heading = document.createElement("h3");
+    heading.textContent = `${payload.name}（只读结果）`;
+    panel.append(heading);
+    payload.items.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "workflow-message-item";
+      const title = document.createElement("strong");
+      title.textContent = `${item.waybillNumber} · ${item.branch}`;
+      const message = document.createElement("pre");
+      message.textContent = item.message || displayReason(item.status);
+      card.append(title, message);
+      panel.append(card);
+    });
+    result.append(panel);
+  } catch {
+    setMessage("计费重确认生成失败，请稍后重试。", "error");
+  }
 }
 
 async function downloadBatchExport() {
@@ -114,6 +151,7 @@ form.addEventListener("submit", async (event) => {
   }
 
   const count = typedEntryCount(rawInput);
+  currentInput = rawInput;
   setMessage(`正在查询 ${count} 个单号...`);
   try {
     const response = await fetch("/api/shipments/batch-lookup", {

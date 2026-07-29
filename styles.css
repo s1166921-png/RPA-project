@@ -121,3 +121,15 @@ textarea {
   .lookup-panel h1 { font-size: 24px; }
   .lookup-form button, #downloadBatchExport { width: 100%; }
 }
+
+.workflow-message {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.workflow-message h3 { margin: 0; }
+.workflow-message-item { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.workflow-message-item pre { margin: 10px 0 0; white-space: pre-wrap; font: inherit; line-height: 1.65; }

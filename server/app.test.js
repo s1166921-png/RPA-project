@@ -67,6 +67,22 @@ test("runs a batch lookup and retains found and missing statuses", async (t) => 
   assert.deepEqual(response.body.results.map((result) => result.status), ["found", "not_found"]);
 });
 
+test("runs the read-only billing weight confirmation workflow", async (t) => {
+  const server = await start({
+    async findByWaybill(value) {
+      return { shipment_number: value, service: "测试服务", sell_charge_amount: "100.00CNY 运费 (7.60/KG)" };
+    }
+  });
+  t.after(() => server.close());
+
+  const response = await request(server, { waybillNumbers: ["MO10082215"] }, "/api/workflows/billing-weight-confirmation");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.workflowId, "billing_weight_confirmation");
+  assert.equal(response.body.readOnly, true);
+  assert.equal(response.body.items[0].branch, "with_fee");
+  assert.match(response.body.items[0].message, /运费：7.60\/KG/);
+});
+
 test("keeps later batch lookup results after a source failure", async (t) => {
   const server = await start({
     async findByWaybill(value) {
