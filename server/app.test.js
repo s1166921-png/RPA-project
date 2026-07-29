@@ -159,7 +159,8 @@ test("allows only an administrator to manage local tenant mappings", async (t) =
   const server = await start({ async findByWaybill() { return null; } }, {
     auth,
     requireAuth: true,
-    tenantMappings: createTenantMappingStore()
+    tenantMappings: createTenantMappingStore(),
+    sourceReadiness: { mode: "new_wisdom", enabled: false, reason: "invoice_template_required" }
   });
   t.after(() => server.close());
 
@@ -169,6 +170,8 @@ test("allows only an administrator to manage local tenant mappings", async (t) =
   assert.equal(saved.status, 200);
   const mappings = await get(server, "/api/operations/tenant-mappings", adminHeaders);
   assert.deepEqual(mappings.body.mappings, [{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }]);
+  const readiness = await get(server, "/api/operations/source-readiness", adminHeaders);
+  assert.deepEqual(readiness.body, { status: "ok", invoiceMonthlyBilling: { mode: "new_wisdom", enabled: false, reason: "invoice_template_required" } });
 
   const customerLogin = await request(server, { username: "customer", password: "customer-pass" }, "/api/auth/login");
   const denied = await get(server, "/api/operations/tenant-mappings", { authorization: `Bearer ${customerLogin.body.token}` });

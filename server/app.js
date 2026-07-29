@@ -100,7 +100,7 @@ function scheduleMonthlyBillingExport({ task, request, user, tenantMappings, inv
   });
 }
 
-function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null }) {
+function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null }) {
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
@@ -150,6 +150,10 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         workflowCount: listWorkflowDefinitions().length,
         recentRunCount: runStore?.list().length || 0
       });
+    }
+
+    if (request.method === "GET" && request.url === "/api/operations/source-readiness") {
+      return sendJson(response, 200, { status: "ok", invoiceMonthlyBilling: sourceReadiness || { mode: "unknown", enabled: false, reason: "not_configured" } });
     }
 
     if (request.method === "GET" && request.url === "/api/operations/tenant-mappings") {

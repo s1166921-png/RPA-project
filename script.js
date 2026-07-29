@@ -226,17 +226,23 @@ function parseCsv(value) {
 async function loadOperations() {
   operationsResult.textContent = "正在读取运营信息…";
   try {
-    const [overviewResponse, mappingsResponse] = await Promise.all([
+    const [overviewResponse, mappingsResponse, readinessResponse] = await Promise.all([
       apiFetch("/api/operations/overview"),
-      apiFetch("/api/operations/tenant-mappings")
+      apiFetch("/api/operations/tenant-mappings"),
+      apiFetch("/api/operations/source-readiness")
     ]);
-    if (!overviewResponse.ok || !mappingsResponse.ok) throw new Error("operations request failed");
+    if (!overviewResponse.ok || !mappingsResponse.ok || !readinessResponse.ok) throw new Error("operations request failed");
     const overview = await overviewResponse.json();
     const mappings = await mappingsResponse.json();
+    const readiness = await readinessResponse.json();
     operationsResult.innerHTML = "";
     const summary = document.createElement("p");
     summary.textContent = `工作流：${overview.workflowCount}；租户映射：${overview.tenantMappingCount}；近期运行：${overview.recentRunCount}`;
     operationsResult.append(summary);
+    const source = document.createElement("p");
+    source.className = "operation-source-readiness";
+    source.textContent = `月账单数据源：${readiness.invoiceMonthlyBilling.enabled ? "已就绪" : "未就绪"}（${readiness.invoiceMonthlyBilling.reason}）`;
+    operationsResult.append(source);
     mappings.mappings.forEach((mapping) => {
       const item = document.createElement("article");
       item.className = "operation-mapping";

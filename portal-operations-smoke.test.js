@@ -40,6 +40,7 @@ async function run() {
     await adminPage.locator("#mappingInvoiceUserIds").fill("101");
     await adminPage.locator("#tenantMappingForm button").click();
     await adminPage.waitForFunction(() => document.querySelector("#operationsResult").innerText.includes("tenant-a"), null, { timeout: 10_000 });
+    assert.match(await adminPage.locator("#operationsResult").innerText(), /not_configured/);
 
     const customerPage = await browser.newPage();
     await customerPage.goto(`http://127.0.0.1:${server.address().port}`);
