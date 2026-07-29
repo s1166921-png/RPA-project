@@ -26,3 +26,38 @@ test("persists tenant mappings and workflow runs across SQLite restarts", () => 
     fs.rmSync(filename, { force: true });
   }
 });
+
+test("persists tenant-scoped export tasks and keeps files out of task listings", () => {
+  const stores = createSqliteStores({ filename: ":memory:", now: () => 1234, newId: () => "export-1" });
+  try {
+    const task = stores.exportTasks.create({ tenantId: "tenant-a", exportType: "monthly_billing", request: { month: "2026-07" } });
+    assert.deepEqual(task, {
+      id: "export-1", tenantId: "tenant-a", exportType: "monthly_billing", status: "queued", createdAt: 1234, updatedAt: 1234
+    });
+
+    stores.exportTasks.complete("export-1", { filename: "monthly-billing-2026-07.xlsx", file: Buffer.from("xlsx") });
+    assert.deepEqual(stores.exportTasks.list("tenant-a"), [{
+      id: "export-1", tenantId: "tenant-a", exportType: "monthly_billing", status: "completed", createdAt: 1234, updatedAt: 1234, filename: "monthly-billing-2026-07.xlsx"
+    }]);
+    assert.equal(stores.exportTasks.download("tenant-b", "export-1"), null);
+    assert.deepEqual(stores.exportTasks.download("tenant-a", "export-1"), { filename: "monthly-billing-2026-07.xlsx", file: Buffer.from("xlsx") });
+  } finally {
+    stores.close();
+  }
+});
+
+test("requeues only a failed export task for its owning tenant", () => {
+  const stores = createSqliteStores({ filename: ":memory:", now: () => 1234, newId: () => "export-retry" });
+  try {
+    stores.exportTasks.create({ tenantId: "tenant-a", exportType: "monthly_billing", request: { month: "2026-07" } });
+    stores.exportTasks.fail("export-retry");
+
+    assert.equal(stores.exportTasks.retry("tenant-b", "export-retry"), null);
+    assert.deepEqual(stores.exportTasks.retry("tenant-a", "export-retry"), {
+      task: { id: "export-retry", tenantId: "tenant-a", exportType: "monthly_billing", status: "queued", createdAt: 1234, updatedAt: 1234 },
+      request: { month: "2026-07" }
+    });
+  } finally {
+    stores.close();
+  }
+});

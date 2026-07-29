@@ -48,13 +48,13 @@ loadTenantMappings(process.env.TENANT_MAPPINGS_JSON || "[]").forEach((mapping) =
     stores.tenantMappings.upsert(mapping.tenantId, mapping);
   }
 });
-const { runStore, tenantMappings } = stores;
+const { runStore, tenantMappings, exportTasks } = stores;
 const auth = requireAuth
   ? createAuthService({
       secret: process.env.AUTH_TOKEN_SECRET,
       users: loadUsers(process.env.PORTAL_USERS_JSON || "[]")
     })
   : null;
-const server = createServer({ provider, invoiceProvider, auth, requireAuth, runStore, tenantMappings, staticRoot: path.resolve(__dirname, "..") });
+const server = createServer({ provider, invoiceProvider, auth, requireAuth, runStore, tenantMappings, exportTasks, staticRoot: path.resolve(__dirname, "..") });
 server.once("close", () => stores.close());
 server.listen(port, host, () => console.log(`Waybill portal: http://${host}:${port}`));

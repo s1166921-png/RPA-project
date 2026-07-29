@@ -6,6 +6,7 @@ const { createServer } = require("./app");
 const { createAuthService, hashPassword } = require("./auth-service");
 const { createWorkflowRunStore } = require("./workflow-run-store");
 const { createTenantMappingStore } = require("./tenant-mapping-store");
+const { createSqliteStores } = require("./sqlite-stores");
 
 async function start(provider, options = {}) {
   const server = createServer({ provider, staticRoot: __dirname + "/..", ...options });
@@ -70,6 +71,29 @@ async function get(server, pathname, extraHeaders = {}) {
       let text = "";
       res.on("data", (chunk) => { text += chunk; });
       res.on("end", () => resolve({ status: res.statusCode, body: text ? JSON.parse(text) : null }));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+async function waitFor(check, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await check();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("timed out waiting for condition");
+}
+
+async function downloadGet(server, pathname, extraHeaders = {}) {
+  const address = server.address();
+  return new Promise((resolve, reject) => {
+    const req = http.request({ hostname: "127.0.0.1", port: address.port, path: pathname, method: "GET", headers: extraHeaders }, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve({ status: res.statusCode, type: res.headers["content-type"], body: Buffer.concat(chunks) }));
     });
     req.on("error", reject);
     req.end();
@@ -203,6 +227,74 @@ test("exports only the authenticated tenant's monthly bill", async (t) => {
   assert.equal(response.type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   assert.match(response.disposition, /monthly-billing-2026-07\.xlsx/);
   assert.equal(response.body.subarray(0, 2).toString(), "PK");
+});
+
+test("creates a tenant-scoped monthly export task and later downloads its file", async (t) => {
+  const stores = createSqliteStores();
+  const auth = authForTests();
+  const server = await start({ async findByWaybill() { return null; } }, {
+    auth,
+    requireAuth: true,
+    exportTasks: stores.exportTasks,
+    invoiceProvider: {
+      async findByMonth() {
+        return [{ invoiceUserId: "101", invoiceNumber: "INV-A", invoiceDate: "2026-07-02", currency: "CNY", totalAmount: "12.00", paidAmount: "2.00", remainingAmount: "10.00", status: "unpaid", source: "test" }];
+      }
+    },
+    tenantMappings: createTenantMappingStore([{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }])
+  });
+  t.after(() => { server.close(); stores.close(); });
+
+  const login = await request(server, { username: "client-a", password: "pass-a" }, "/api/auth/login");
+  const headers = { authorization: `Bearer ${login.body.token}` };
+  const created = await request(server, { month: "2026-07" }, "/api/exports/tasks/monthly-billing", headers);
+  assert.equal(created.status, 202);
+  assert.equal(created.body.task.status, "queued");
+
+  const completed = await waitFor(async () => {
+    const listed = await get(server, "/api/exports/tasks", headers);
+    return listed.body.tasks.find((task) => task.id === created.body.task.id && task.status === "completed");
+  });
+  const downloaded = await downloadGet(server, `/api/exports/tasks/${completed.id}/download`, headers);
+  assert.equal(downloaded.status, 200);
+  assert.equal(downloaded.type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  assert.equal(downloaded.body.subarray(0, 2).toString(), "PK");
+});
+
+test("retries a failed monthly export task without changing its tenant scope", async (t) => {
+  const stores = createSqliteStores();
+  const auth = authForTests();
+  let sourceAvailable = false;
+  const server = await start({ async findByWaybill() { return null; } }, {
+    auth,
+    requireAuth: true,
+    exportTasks: stores.exportTasks,
+    invoiceProvider: {
+      async findByMonth() {
+        if (!sourceAvailable) throw new Error("temporary source failure");
+        return [{ invoiceUserId: "101", invoiceNumber: "INV-A", invoiceDate: "2026-07-02", currency: "CNY", totalAmount: "12.00", paidAmount: "2.00", remainingAmount: "10.00", status: "unpaid", source: "test" }];
+      }
+    },
+    tenantMappings: createTenantMappingStore([{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }])
+  });
+  t.after(() => { server.close(); stores.close(); });
+
+  const login = await request(server, { username: "client-a", password: "pass-a" }, "/api/auth/login");
+  const headers = { authorization: `Bearer ${login.body.token}` };
+  const created = await request(server, { month: "2026-07" }, "/api/exports/tasks/monthly-billing", headers);
+  const failed = await waitFor(async () => {
+    const listed = await get(server, "/api/exports/tasks", headers);
+    return listed.body.tasks.find((task) => task.id === created.body.task.id && task.status === "failed");
+  });
+
+  sourceAvailable = true;
+  const retried = await request(server, {}, `/api/exports/tasks/${failed.id}/retry`, headers);
+  assert.equal(retried.status, 202);
+  const completed = await waitFor(async () => {
+    const listed = await get(server, "/api/exports/tasks", headers);
+    return listed.body.tasks.find((task) => task.id === failed.id && task.status === "completed");
+  });
+  assert.equal(completed.exportType, "monthly_billing");
 });
 
 test("runs a batch lookup and retains found and missing statuses", async (t) => {

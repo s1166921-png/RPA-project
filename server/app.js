@@ -84,7 +84,23 @@ async function queryMonthlyBilling(body, user, tenantMappings, invoiceProvider) 
   }
 }
 
-function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null }) {
+function scheduleMonthlyBillingExport({ task, request, user, tenantMappings, invoiceProvider, exportTasks, runStore }) {
+  const startedAt = Date.now();
+  setImmediate(async () => {
+    try {
+      const monthly = await queryMonthlyBilling(request, user, tenantMappings, invoiceProvider);
+      if (monthly.status !== "completed") throw new Error(monthly.status);
+      const file = await createXlsxExport(buildMonthlyBillingExportRows(monthly.result));
+      exportTasks.complete(task.id, { filename: `monthly-billing-${monthly.result.month}.xlsx`, file });
+      recordRun(runStore, user, "monthly_billing_export", "completed", startedAt, monthly.result.items.length);
+    } catch {
+      exportTasks.fail(task.id);
+      recordRun(runStore, user, "monthly_billing_export", "failed", startedAt, 0);
+    }
+  });
+}
+
+function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null }) {
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
@@ -392,6 +408,49 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         recordRun(runStore, user, "monthly_billing_export", "invalid_input", startedAt, 0);
         return sendJson(response, 400, { status: "invalid_input", workflowId: "monthly_billing_query" });
       }
+    }
+
+    if (request.method === "POST" && request.url === "/api/exports/tasks/monthly-billing") {
+      try {
+        const body = await readJson(request);
+        const range = parseBillingMonth(body.month);
+        if (!exportTasks) return sendJson(response, 503, { status: "export_unavailable" });
+        const task = exportTasks.create({
+          tenantId: user?.tenantId || "public",
+          exportType: "monthly_billing",
+          request: { month: range.month }
+        });
+        scheduleMonthlyBillingExport({ task, request: { month: range.month }, user, tenantMappings, invoiceProvider, exportTasks, runStore });
+        return sendJson(response, 202, { status: "queued", task });
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input" });
+      }
+    }
+
+    if (request.method === "GET" && request.url === "/api/exports/tasks") {
+      if (!exportTasks) return sendJson(response, 503, { status: "export_unavailable" });
+      return sendJson(response, 200, { status: "ok", tasks: exportTasks.list(user?.tenantId || "public") });
+    }
+
+    const exportRetryMatch = request.url.match(/^\/api\/exports\/tasks\/([^/?]+)\/retry$/);
+    if (request.method === "POST" && exportRetryMatch) {
+      if (!exportTasks) return sendJson(response, 503, { status: "export_unavailable" });
+      const retried = exportTasks.retry(user?.tenantId || "public", decodeURIComponent(exportRetryMatch[1]));
+      if (!retried || retried.task.exportType !== "monthly_billing") return sendJson(response, 404, { status: "not_found" });
+      scheduleMonthlyBillingExport({ task: retried.task, request: retried.request, user, tenantMappings, invoiceProvider, exportTasks, runStore });
+      return sendJson(response, 202, { status: "queued", task: retried.task });
+    }
+
+    const exportDownloadMatch = request.url.match(/^\/api\/exports\/tasks\/([^/?]+)\/download$/);
+    if (request.method === "GET" && exportDownloadMatch) {
+      const task = exportTasks?.download(user?.tenantId || "public", decodeURIComponent(exportDownloadMatch[1]));
+      if (!task) return sendJson(response, 404, { status: "not_found" });
+      response.writeHead(200, {
+        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-disposition": `attachment; filename="${task.filename}"`,
+        "cache-control": "no-store"
+      });
+      return response.end(task.file);
     }
 
     const pathname = request.url === "/" ? "/index.html" : request.url;

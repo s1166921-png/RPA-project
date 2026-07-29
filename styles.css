@@ -166,6 +166,12 @@ textarea {
 .history-heading h2 { margin: 0; font-size: 20px; }
 .history-result { display: grid; gap: 8px; margin-top: 14px; color: var(--muted); }
 .history-item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.export-center { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
+.export-task-list { display: grid; gap: 8px; margin-top: 14px; color: var(--muted); }
+.export-task { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.export-task strong { color: var(--text); }
+.export-task small { margin-right: auto; }
+.export-task button { min-height: 32px; padding: 5px 10px; }
 .operations-panel { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
 .operations-result { display: grid; gap: 8px; margin-top: 14px; color: var(--muted); }
 .operation-mapping { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }

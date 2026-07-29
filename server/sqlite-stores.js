@@ -1,4 +1,5 @@
 const { DatabaseSync } = require("node:sqlite");
+const crypto = require("node:crypto");
 
 function parseJson(value) {
   try { return JSON.parse(value); } catch { return []; }
@@ -27,6 +28,17 @@ function createSqliteStores(options = {}) {
       input_count INTEGER NOT NULL,
       created_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS export_tasks (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      export_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      request_json TEXT NOT NULL,
+      filename TEXT,
+      file BLOB,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   const mappingFromRow = (row) => row && ({
@@ -47,7 +59,25 @@ function createSqliteStores(options = {}) {
   const saveRun = db.prepare("INSERT INTO workflow_runs (workflow_id, tenant_id, status, duration_ms, input_count, created_at) VALUES (?, ?, ?, ?, ?, ?)");
   const listRunsForTenant = db.prepare("SELECT workflow_id, tenant_id, status, duration_ms, input_count, created_at FROM workflow_runs WHERE tenant_id = ? ORDER BY id DESC LIMIT ?");
   const listRuns = db.prepare("SELECT workflow_id, tenant_id, status, duration_ms, input_count, created_at FROM workflow_runs ORDER BY id DESC LIMIT ?");
+  const createExportTask = db.prepare("INSERT INTO export_tasks (id, tenant_id, export_type, status, request_json, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?, ?)");
+  const completeExportTask = db.prepare("UPDATE export_tasks SET status = 'completed', filename = ?, file = ?, updated_at = ? WHERE id = ? AND status IN ('queued', 'processing')");
+  const failExportTask = db.prepare("UPDATE export_tasks SET status = 'failed', updated_at = ? WHERE id = ? AND status IN ('queued', 'processing')");
+  const retryExportTask = db.prepare("UPDATE export_tasks SET status = 'queued', filename = NULL, file = NULL, updated_at = ? WHERE tenant_id = ? AND id = ? AND status = 'failed'");
+  const listExportTasks = db.prepare("SELECT id, tenant_id, export_type, status, filename, created_at, updated_at FROM export_tasks WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ?");
+  const getExportTask = db.prepare("SELECT id, tenant_id, export_type, status, request_json, filename, created_at, updated_at FROM export_tasks WHERE tenant_id = ? AND id = ?");
+  const downloadExportTask = db.prepare("SELECT filename, file FROM export_tasks WHERE tenant_id = ? AND id = ? AND status = 'completed'");
   const maxEntries = Number(options.maxEntries || 200);
+  const newId = options.newId || crypto.randomUUID;
+
+  const publicExportTask = (row) => row && ({
+    id: row.id,
+    tenantId: row.tenant_id,
+    exportType: row.export_type,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    ...(row.filename ? { filename: row.filename } : {})
+  });
 
   return {
     tenantMappings: {
@@ -76,6 +106,36 @@ function createSqliteStores(options = {}) {
           inputCount: row.input_count,
           createdAt: row.created_at
         }));
+      }
+    },
+    exportTasks: {
+      create({ tenantId, exportType, request = {} }) {
+        const id = String(newId());
+        const normalizedTenantId = String(tenantId || "").trim();
+        const normalizedExportType = String(exportType || "").trim();
+        if (!normalizedTenantId || !normalizedExportType) throw new Error("tenantId and exportType are required");
+        const timestamp = now();
+        createExportTask.run(id, normalizedTenantId, normalizedExportType, JSON.stringify(request), timestamp, timestamp);
+        return { id, tenantId: normalizedTenantId, exportType: normalizedExportType, status: "queued", createdAt: timestamp, updatedAt: timestamp };
+      },
+      complete(id, { filename, file }) {
+        completeExportTask.run(String(filename || "export.xlsx"), Buffer.from(file || []), now(), String(id));
+      },
+      fail(id) {
+        failExportTask.run(now(), String(id));
+      },
+      retry(tenantId, id) {
+        const result = retryExportTask.run(now(), String(tenantId), String(id));
+        if (!result.changes) return null;
+        const row = getExportTask.get(String(tenantId), String(id));
+        return row ? { task: publicExportTask(row), request: parseJson(row.request_json) } : null;
+      },
+      list(tenantId) {
+        return listExportTasks.all(String(tenantId), maxEntries).map(publicExportTask);
+      },
+      download(tenantId, id) {
+        const row = downloadExportTask.get(String(tenantId), String(id));
+        return row ? { filename: row.filename, file: Buffer.from(row.file) } : null;
       }
     },
     close() { db.close(); }

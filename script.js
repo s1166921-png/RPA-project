@@ -25,6 +25,8 @@ const mappingInvoiceUserIds = document.querySelector("#mappingInvoiceUserIds");
 const monthlyBillingForm = document.querySelector("#monthlyBillingForm");
 const monthlyBillingMonth = document.querySelector("#monthlyBillingMonth");
 const monthlyBillingResult = document.querySelector("#monthlyBillingResult");
+const exportsRefresh = document.querySelector("#exportsRefresh");
+const exportTasks = document.querySelector("#exportTasks");
 let authToken = sessionStorage.getItem("portalAuthToken") || "";
 let currentUser = null;
 
@@ -64,6 +66,7 @@ async function initializeAuth() {
       currentUser = await loadCurrentUser();
       setOperationsVisible(currentUser);
       loadWorkflowCatalog();
+      loadExportTasks();
     }
   } catch {
     // Direct lookup mode can continue when the optional auth config is unavailable.
@@ -116,6 +119,7 @@ loginForm?.addEventListener("submit", async (event) => {
     logoutButton.hidden = false;
     setOperationsVisible(currentUser);
     loadWorkflowCatalog();
+    loadExportTasks();
     loginPassword.value = "";
   } catch {
     loginStatus.textContent = "账号或密码不正确，请重试。";
@@ -131,6 +135,89 @@ logoutButton?.addEventListener("click", () => {
   setOperationsVisible(null);
   loginStatus.textContent = "已退出登录。";
 });
+
+function exportStatusLabel(status) {
+  return { queued: "排队中", processing: "生成中", completed: "已完成", failed: "生成失败" }[status] || status;
+}
+
+function exportTypeLabel(type) {
+  return { monthly_billing: "月度账单" }[type] || type;
+}
+
+async function downloadExportTask(id, filename) {
+  try {
+    const response = await apiFetch(`/api/exports/tasks/${encodeURIComponent(id)}/download`);
+    if (!response.ok) throw new Error("export download failed");
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename || "export.xlsx";
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    exportTasks.textContent = "导出文件暂时不可下载，请刷新后重试。";
+  }
+}
+
+async function retryExportTask(id) {
+  try {
+    const response = await apiFetch(`/api/exports/tasks/${encodeURIComponent(id)}/retry`, { method: "POST" });
+    if (!response.ok) throw new Error("export retry failed");
+    await loadExportTasks();
+  } catch {
+    exportTasks.textContent = "导出任务重试失败，请稍后再试。";
+  }
+}
+
+function renderExportTasks(tasks) {
+  exportTasks.innerHTML = "";
+  if (!tasks.length) {
+    exportTasks.textContent = "暂无导出任务。";
+    return;
+  }
+  tasks.forEach((task) => {
+    const item = document.createElement("article");
+    item.className = "export-task";
+    item.dataset.status = task.status;
+    const label = document.createElement("strong");
+    label.textContent = `${exportTypeLabel(task.exportType)} · ${exportStatusLabel(task.status)}`;
+    const detail = document.createElement("small");
+    detail.textContent = new Date(task.updatedAt).toLocaleString();
+    item.append(label, detail);
+    if (task.status === "completed" && task.filename) {
+      const download = document.createElement("button");
+      download.type = "button";
+      download.textContent = "下载";
+      download.addEventListener("click", () => downloadExportTask(task.id, task.filename));
+      item.append(download);
+    }
+    if (task.status === "failed") {
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.textContent = "重试";
+      retry.addEventListener("click", () => retryExportTask(task.id));
+      item.append(retry);
+    }
+    exportTasks.append(item);
+  });
+}
+
+async function loadExportTasks() {
+  if (!authToken) return;
+  try {
+    const response = await apiFetch("/api/exports/tasks");
+    if (!response.ok) return;
+    const payload = await response.json();
+    renderExportTasks(payload.tasks || []);
+    if (payload.tasks?.some((task) => task.status === "queued" || task.status === "processing")) {
+      window.setTimeout(loadExportTasks, 400);
+    }
+  } catch {
+    exportTasks.textContent = "导出任务暂时不可用。";
+  }
+}
+
+exportsRefresh?.addEventListener("click", loadExportTasks);
 
 function parseCsv(value) {
   return value.split(/[,，\s]+/).map((item) => item.trim()).filter(Boolean);
@@ -516,7 +603,7 @@ function renderMonthlyBilling(payload) {
   const exportButton = document.createElement("button");
   exportButton.type = "button";
   exportButton.textContent = "下载账单 Excel";
-  exportButton.addEventListener("click", () => downloadMonthlyBilling(payload.month));
+  exportButton.addEventListener("click", () => createMonthlyExportTask(payload.month));
   heading.append(exportButton);
   monthlyBillingResult.append(heading);
 
@@ -546,9 +633,9 @@ function renderMonthlyBilling(payload) {
   monthlyBillingResult.append(list);
 }
 
-async function downloadMonthlyBilling(month) {
+async function createMonthlyExportTask(month) {
   try {
-    const response = await apiFetch("/api/exports/monthly-billing", {
+    const response = await apiFetch("/api/exports/tasks/monthly-billing", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ month })
@@ -559,16 +646,9 @@ async function downloadMonthlyBilling(month) {
       monthlyBillingResult.textContent = billingRequestMessage(payload.status);
       return;
     }
-    const url = URL.createObjectURL(await response.blob());
-    const disposition = response.headers.get("content-disposition") || "";
-    const filename = disposition.match(/filename="?([^";]+)/)?.[1] || `monthly-billing-${month}.xlsx`;
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
+    await loadExportTasks();
   } catch {
-    monthlyBillingResult.textContent = "账单导出失败，请稍后再试。";
+    monthlyBillingResult.textContent = "账单导出任务创建失败，请稍后再试。";
   }
 }
 

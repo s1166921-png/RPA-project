@@ -4,8 +4,10 @@ const { createServer } = require("./server/app");
 const { createAuthService, hashPassword } = require("./server/auth-service");
 const { createTenantMappingStore } = require("./server/tenant-mapping-store");
 const { createSampleInvoiceProvider } = require("./server/providers/sample-invoice-provider");
+const { createSqliteStores } = require("./server/sqlite-stores");
 
 async function run() {
+  const stores = createSqliteStores();
   const auth = createAuthService({
     secret: "monthly-billing-smoke-secret",
     users: [{ username: "customer", passwordHash: hashPassword("customer-pass"), tenantId: "tenant-a", allowedCustomerCodes: ["CUST-A"] }]
@@ -15,6 +17,7 @@ async function run() {
     auth,
     requireAuth: true,
     tenantMappings: createTenantMappingStore([{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }]),
+    exportTasks: stores.exportTasks,
     invoiceProvider: createSampleInvoiceProvider(),
     provider: { async findByWaybill() { return null; } }
   });
@@ -32,10 +35,14 @@ async function run() {
     await item.waitFor({ timeout: 10_000 });
     assert.match(await item.innerText(), /826\.00/);
     assert.equal(await page.locator('.monthly-billing-item[data-invoice="SAMPLE-202607-202"]').count(), 0);
-    console.log(JSON.stringify({ monthlyBillingUserPath: "passed", tenantInvoiceOnly: "passed" }));
+    await page.locator("#monthlyBillingResult button").click();
+    const exportTask = page.locator('.export-task[data-status="completed"]');
+    await exportTask.waitFor({ timeout: 10_000 });
+    console.log(JSON.stringify({ monthlyBillingUserPath: "passed", tenantInvoiceOnly: "passed", asyncExportCompleted: "passed" }));
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
+    stores.close();
   }
 }
 
