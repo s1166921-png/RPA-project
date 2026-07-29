@@ -78,9 +78,19 @@ function recordRun(runStore, user, workflowId, status, startedAt, inputCount) {
   runStore?.record({
     workflowId,
     tenantId: user?.tenantId || "public",
+    actorUsername: user?.username || "anonymous",
     status,
     durationMs: Date.now() - startedAt,
     inputCount
+  });
+}
+
+function recordAudit(auditLogs, user, action, outcome) {
+  auditLogs?.record({
+    tenantId: user?.tenantId || "public",
+    actorUsername: user?.username || "anonymous",
+    action,
+    outcome
   });
 }
 
@@ -132,16 +142,29 @@ function scheduleMonthlyBillingExport({ task, request, user, tenantMappings, inv
   });
 }
 
-function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null, portalUsers = null, sourceSnapshots = null }) {
+function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null, portalUsers = null, sourceSnapshots = null, auditLogs = null }) {
+  if (runStore && auditLogs) {
+    const baseRunStore = runStore;
+    runStore = {
+      record(run) {
+        baseRunStore.record(run);
+        recordAudit(auditLogs, { username: run.actorUsername, tenantId: run.tenantId }, `workflow:${run.workflowId}`, run.status);
+      },
+      list(tenantId) { return baseRunStore.list(tenantId); }
+    };
+  }
   return http.createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/auth/login") {
       try {
         if (!auth) return sendJson(response, 503, { status: "auth_unavailable" });
         const body = await readJson(request);
         const result = auth.login(body.username, body.password);
-        return result
-          ? sendJson(response, 200, { status: "authenticated", ...result })
-          : sendJson(response, 401, { status: "invalid_credentials" });
+        if (result) {
+          recordAudit(auditLogs, result.user, "auth:login", "authenticated");
+          return sendJson(response, 200, { status: "authenticated", ...result });
+        }
+        recordAudit(auditLogs, null, "auth:login", "invalid_credentials");
+        return sendJson(response, 401, { status: "invalid_credentials" });
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
       }
@@ -180,7 +203,8 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         status: "ok",
         tenantMappingCount: tenantMappings?.list().length || 0,
         workflowCount: listWorkflowDefinitions().length,
-        recentRunCount: runStore?.list().length || 0
+        recentRunCount: runStore?.list().length || 0,
+        recentAuditCount: auditLogs?.list().length || 0
       });
     }
 
@@ -194,6 +218,10 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
 
     if (request.method === "GET" && request.url === "/api/operations/users") {
       return sendJson(response, 200, { status: "ok", users: portalUsers?.list() || [] });
+    }
+
+    if (request.method === "GET" && request.url === "/api/operations/audit-logs") {
+      return sendJson(response, 200, { status: "ok", logs: auditLogs?.list() || [] });
     }
 
     if (request.method === "POST" && request.url === "/api/operations/users") {
@@ -215,6 +243,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
           enabled: true
         });
         const { passwordHash, ...publicUser } = stored;
+        recordAudit(auditLogs, user, "operations:create_customer", "created");
         return sendJson(response, 201, { status: "created", user: publicUser });
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
@@ -233,6 +262,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         }
         const stored = portalUsers.upsert({ ...existing, enabled: body.enabled });
         const { passwordHash, ...publicUser } = stored;
+        recordAudit(auditLogs, user, "operations:update_customer_status", body.enabled ? "enabled" : "disabled");
         return sendJson(response, 200, { status: "updated", user: publicUser });
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
@@ -244,6 +274,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       try {
         if (!tenantMappings) return sendJson(response, 503, { status: "configuration_unavailable" });
         const mapping = tenantMappings.upsert(decodeURIComponent(mappingMatch[1]), await readJson(request));
+        recordAudit(auditLogs, user, "operations:tenant_mapping", "saved");
         return sendJson(response, 200, { status: "saved", mapping });
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
@@ -426,6 +457,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
           return sendJson(response, status, result);
         }
         const file = await createXlsxExport(buildExportRows([result.shipment]));
+        recordAudit(auditLogs, user, "export:waybill", "completed");
         response.writeHead(200, {
           "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "content-disposition": `attachment; filename="waybill-${result.shipment.waybillNumber}.xlsx"`,
@@ -460,6 +492,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       }
       try {
         const file = await createXlsxExport(buildBatchExportRows(body.results));
+        recordAudit(auditLogs, user, "export:batch_waybills", "completed");
         response.writeHead(200, {
           "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "content-disposition": `attachment; filename="waybill-batch-${Date.now()}.xlsx"`,
@@ -503,6 +536,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
           exportType: "monthly_billing",
           request: { month: range.month }
         });
+        recordAudit(auditLogs, user, "export:monthly_billing_async", "queued");
         scheduleMonthlyBillingExport({ task, request: { month: range.month }, user, tenantMappings, invoiceProvider, exportTasks, runStore, sourceSnapshots });
         return sendJson(response, 202, { status: "queued", task });
       } catch {
@@ -521,6 +555,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       const retried = exportTasks.retry(user?.tenantId || "public", decodeURIComponent(exportRetryMatch[1]));
       if (!retried || retried.task.exportType !== "monthly_billing") return sendJson(response, 404, { status: "not_found" });
       scheduleMonthlyBillingExport({ task: retried.task, request: retried.request, user, tenantMappings, invoiceProvider, exportTasks, runStore, sourceSnapshots });
+      recordAudit(auditLogs, user, "export:monthly_billing_retry", "queued");
       return sendJson(response, 202, { status: "queued", task: retried.task });
     }
 
@@ -528,6 +563,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
     if (request.method === "GET" && exportDownloadMatch) {
       const task = exportTasks?.download(user?.tenantId || "public", decodeURIComponent(exportDownloadMatch[1]));
       if (!task) return sendJson(response, 404, { status: "not_found" });
+      recordAudit(auditLogs, user, "export:download", "completed");
       response.writeHead(200, {
         "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "content-disposition": `attachment; filename="${task.filename}"`,

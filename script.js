@@ -232,20 +232,22 @@ function parseCsv(value) {
 async function loadOperations() {
   operationsResult.textContent = "正在读取运营信息…";
   try {
-    const [overviewResponse, mappingsResponse, readinessResponse, usersResponse] = await Promise.all([
+    const [overviewResponse, mappingsResponse, readinessResponse, usersResponse, auditLogsResponse] = await Promise.all([
       apiFetch("/api/operations/overview"),
       apiFetch("/api/operations/tenant-mappings"),
       apiFetch("/api/operations/source-readiness"),
-      apiFetch("/api/operations/users")
+      apiFetch("/api/operations/users"),
+      apiFetch("/api/operations/audit-logs")
     ]);
-    if (!overviewResponse.ok || !mappingsResponse.ok || !readinessResponse.ok || !usersResponse.ok) throw new Error("operations request failed");
+    if (!overviewResponse.ok || !mappingsResponse.ok || !readinessResponse.ok || !usersResponse.ok || !auditLogsResponse.ok) throw new Error("operations request failed");
     const overview = await overviewResponse.json();
     const mappings = await mappingsResponse.json();
     const readiness = await readinessResponse.json();
     const users = await usersResponse.json();
+    const auditLogs = await auditLogsResponse.json();
     operationsResult.innerHTML = "";
     const summary = document.createElement("p");
-    summary.textContent = `工作流：${overview.workflowCount}；租户映射：${overview.tenantMappingCount}；近期运行：${overview.recentRunCount}`;
+    summary.textContent = `工作流：${overview.workflowCount}；租户映射：${overview.tenantMappingCount}；近期运行：${overview.recentRunCount}；审计记录：${overview.recentAuditCount}`;
     operationsResult.append(summary);
     const source = document.createElement("p");
     source.className = "operation-source-readiness";
@@ -285,6 +287,12 @@ async function loadOperations() {
       });
       item.append(detail, toggle);
       portalUserResult.append(item);
+    });
+    auditLogs.logs.slice(0, 10).forEach((log) => {
+      const item = document.createElement("article");
+      item.className = "operation-audit-log";
+      item.textContent = `${new Date(log.createdAt).toLocaleString()} · ${log.actorUsername} · ${log.tenantId} · ${log.action} · ${log.outcome}`;
+      operationsResult.append(item);
     });
   } catch {
     operationsResult.textContent = "运营信息暂时不可用。";

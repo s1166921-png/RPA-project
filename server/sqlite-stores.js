@@ -55,6 +55,14 @@ function createSqliteStores(options = {}) {
       query_type TEXT NOT NULL,
       queried_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL,
+      actor_username TEXT NOT NULL,
+      action TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   const mappingFromRow = (row) => row && ({
@@ -97,6 +105,8 @@ function createSqliteStores(options = {}) {
   `);
   const createSourceSnapshot = db.prepare("INSERT INTO source_snapshots (id, tenant_id, source, query_type, queried_at) VALUES (?, ?, ?, ?, ?)");
   const listSourceSnapshots = db.prepare("SELECT id, source, query_type, queried_at FROM source_snapshots WHERE tenant_id = ? ORDER BY queried_at DESC LIMIT ?");
+  const createAuditLog = db.prepare("INSERT INTO audit_logs (tenant_id, actor_username, action, outcome, created_at) VALUES (?, ?, ?, ?, ?)");
+  const listAuditLogs = db.prepare("SELECT tenant_id, actor_username, action, outcome, created_at FROM audit_logs ORDER BY id DESC LIMIT ?");
   const maxEntries = Number(options.maxEntries || 200);
   const newId = options.newId || crypto.randomUUID;
 
@@ -210,6 +220,26 @@ function createSqliteStores(options = {}) {
           source: row.source,
           queryType: row.query_type,
           queriedAt: row.queried_at
+        }));
+      }
+    },
+    auditLogs: {
+      record(entry) {
+        createAuditLog.run(
+          String(entry?.tenantId || "public"),
+          String(entry?.actorUsername || "anonymous"),
+          String(entry?.action || "unknown"),
+          String(entry?.outcome || "unknown"),
+          now()
+        );
+      },
+      list() {
+        return listAuditLogs.all(maxEntries).map((row) => ({
+          tenantId: row.tenant_id,
+          actorUsername: row.actor_username,
+          action: row.action,
+          outcome: row.outcome,
+          createdAt: row.created_at
         }));
       }
     },

@@ -198,6 +198,33 @@ test("allows only an administrator to manage local tenant mappings", async (t) =
   assert.equal(customerPatch.status, 403);
 });
 
+test("keeps audit logs free of business payloads and admin-only", async (t) => {
+  const stores = createSqliteStores({ filename: ":memory:" });
+  const auth = createAuthService({
+    secret: "audit-secret",
+    users: [
+      { username: "admin", passwordHash: hashPassword("admin-pass"), tenantId: "operations", role: "admin", allowedCustomerCodes: [] },
+      { username: "customer", passwordHash: hashPassword("customer-pass"), tenantId: "tenant-a", allowedCustomerCodes: ["CUST-A"] }
+    ]
+  });
+  const server = await start({ async findByWaybill(value) { return { waybill_number: value, customer_code: "CUST-A" }; } }, {
+    auth, requireAuth: true, runStore: stores.runStore, auditLogs: stores.auditLogs
+  });
+  t.after(() => { server.close(); stores.close(); });
+
+  const customerLogin = await request(server, { username: "customer", password: "customer-pass" }, "/api/auth/login");
+  const customerHeaders = { authorization: `Bearer ${customerLogin.body.token}` };
+  await request(server, { waybillNumbers: ["MO-SENSITIVE-1"] }, "/api/shipments/batch-lookup", customerHeaders);
+  const customerLogs = await get(server, "/api/operations/audit-logs", customerHeaders);
+  assert.equal(customerLogs.status, 403);
+
+  const adminLogin = await request(server, { username: "admin", password: "admin-pass" }, "/api/auth/login");
+  const logs = await get(server, "/api/operations/audit-logs", { authorization: `Bearer ${adminLogin.body.token}` });
+  assert.equal(logs.status, 200);
+  assert.ok(logs.body.logs.some((log) => log.action === "workflow:waybill_lookup" && log.actorUsername === "customer"));
+  assert.equal(JSON.stringify(logs.body.logs).includes("MO-SENSITIVE-1"), false);
+});
+
 test("queries only mapped monthly invoices and omits source user identifiers", async (t) => {
   const auth = authForTests();
   const invoiceProvider = {

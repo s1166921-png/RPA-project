@@ -50,7 +50,7 @@ loadTenantMappings(process.env.TENANT_MAPPINGS_JSON || "[]").forEach((mapping) =
     stores.tenantMappings.upsert(mapping.tenantId, mapping);
   }
 });
-const { runStore, tenantMappings, exportTasks, portalUsers, sourceSnapshots } = stores;
+const { runStore, tenantMappings, exportTasks, portalUsers, sourceSnapshots, auditLogs } = stores;
 loadUsers(process.env.PORTAL_USERS_JSON || "[]").forEach((user) => {
   if (!portalUsers.get(user.username)) portalUsers.upsert(user);
 });
@@ -66,6 +66,6 @@ const sourceReadiness = {
   enabled: invoiceSourceConfig.enabled,
   reason: invoiceSourceConfig.reason
 };
-const server = createServer({ provider, invoiceProvider, auth, requireAuth, runStore, tenantMappings, exportTasks, sourceReadiness, portalUsers, sourceSnapshots, staticRoot: path.resolve(__dirname, "..") });
+const server = createServer({ provider, invoiceProvider, auth, requireAuth, runStore, tenantMappings, exportTasks, sourceReadiness, portalUsers, sourceSnapshots, auditLogs, staticRoot: path.resolve(__dirname, "..") });
 server.once("close", () => stores.close());
 server.listen(port, host, () => console.log(`Waybill portal: http://${host}:${port}`));

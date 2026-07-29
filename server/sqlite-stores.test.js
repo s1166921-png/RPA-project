@@ -93,3 +93,15 @@ test("stores source snapshot metadata per tenant without business payloads", () 
     stores.close();
   }
 });
+
+test("stores only safe audit summaries", () => {
+  const stores = createSqliteStores({ filename: ":memory:", now: () => 1234 });
+  try {
+    stores.auditLogs.record({ tenantId: "tenant-a", actorUsername: "client-a", action: "workflow:shipment_tracking", outcome: "completed" });
+    assert.deepEqual(stores.auditLogs.list(), [{
+      tenantId: "tenant-a", actorUsername: "client-a", action: "workflow:shipment_tracking", outcome: "completed", createdAt: 1234
+    }]);
+  } finally {
+    stores.close();
+  }
+});
