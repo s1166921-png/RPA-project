@@ -668,7 +668,7 @@ function renderMonthlyBilling(payload) {
     const details = document.createElement("p");
     details.textContent = `${invoice.invoiceDate || "-"} · ${invoice.currency || "-"} · 应收 ${invoice.totalAmount} · 未付 ${invoice.remainingAmount}`;
     const source = document.createElement("small");
-    source.textContent = `状态：${invoice.status || "-"}；来源：${invoice.source || "-"}；查询时间：${invoice.queriedAt}`;
+    source.textContent = `状态：${invoice.status || "-"}；来源：${invoice.source || "-"}；查询时间：${invoice.queriedAt}；快照：${invoice.sourceSnapshotId || "-"}`;
     item.append(title, details, source);
     list.append(item);
   });

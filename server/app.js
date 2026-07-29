@@ -84,7 +84,17 @@ function recordRun(runStore, user, workflowId, status, startedAt, inputCount) {
   });
 }
 
-async function queryMonthlyBilling(body, user, tenantMappings, invoiceProvider) {
+function attachMonthlySourceSnapshot(invoices, user, sourceSnapshots, queryType) {
+  if (!sourceSnapshots || invoices.length === 0) return invoices;
+  const snapshot = sourceSnapshots.create({
+    tenantId: user?.tenantId || "public",
+    source: invoices[0].source || "invoice_source",
+    queryType
+  });
+  return invoices.map((invoice) => ({ ...invoice, sourceSnapshotId: snapshot.id }));
+}
+
+async function queryMonthlyBilling(body, user, tenantMappings, invoiceProvider, sourceSnapshots, queryType = "monthly_billing_query") {
   const range = parseBillingMonth(body.month);
   const tenantId = user?.tenantId || "public";
   const mapping = tenantMappings?.get(tenantId);
@@ -99,17 +109,18 @@ async function queryMonthlyBilling(body, user, tenantMappings, invoiceProvider) 
     });
     const allowedIds = new Set(mapping.invoiceUserIds.map(String));
     const scopedInvoices = (Array.isArray(invoices) ? invoices : []).filter((invoice) => allowedIds.has(String(invoice.invoiceUserId)));
-    return { status: "completed", result: runMonthlyBillingWorkflow({ month: range.month, invoices: scopedInvoices }) };
+    const auditedInvoices = attachMonthlySourceSnapshot(scopedInvoices, user, sourceSnapshots, queryType);
+    return { status: "completed", result: runMonthlyBillingWorkflow({ month: range.month, invoices: auditedInvoices }) };
   } catch {
     return { status: "source_unavailable" };
   }
 }
 
-function scheduleMonthlyBillingExport({ task, request, user, tenantMappings, invoiceProvider, exportTasks, runStore }) {
+function scheduleMonthlyBillingExport({ task, request, user, tenantMappings, invoiceProvider, exportTasks, runStore, sourceSnapshots }) {
   const startedAt = Date.now();
   setImmediate(async () => {
     try {
-      const monthly = await queryMonthlyBilling(request, user, tenantMappings, invoiceProvider);
+      const monthly = await queryMonthlyBilling(request, user, tenantMappings, invoiceProvider, sourceSnapshots, "monthly_billing_export");
       if (monthly.status !== "completed") throw new Error(monthly.status);
       const file = await createXlsxExport(buildMonthlyBillingExportRows(monthly.result));
       exportTasks.complete(task.id, { filename: `monthly-billing-${monthly.result.month}.xlsx`, file });
@@ -308,7 +319,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       const startedAt = Date.now();
       try {
         const body = await readJson(request);
-        const monthly = await queryMonthlyBilling(body, user, tenantMappings, invoiceProvider);
+        const monthly = await queryMonthlyBilling(body, user, tenantMappings, invoiceProvider, sourceSnapshots);
         if (monthly.status !== "completed") {
           recordRun(runStore, user, "monthly_billing_query", monthly.status, startedAt, 0);
           return sendJson(response, monthly.status === "configuration_required" ? 422 : 503, { status: monthly.status, workflowId: "monthly_billing_query" });
@@ -376,7 +387,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
             return runWeightValidationWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_weight_validation"));
           },
           monthlyBilling: async (month) => {
-            const monthly = await queryMonthlyBilling({ month }, user, tenantMappings, invoiceProvider);
+            const monthly = await queryMonthlyBilling({ month }, user, tenantMappings, invoiceProvider, sourceSnapshots, "assistant_monthly_billing");
             return monthly.status === "completed"
               ? monthly.result
               : { status: monthly.status, workflowId: "monthly_billing_query", items: [], totals: [] };
@@ -445,7 +456,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
     if (request.method === "POST" && request.url === "/api/exports/monthly-billing") {
       const startedAt = Date.now();
       try {
-        const monthly = await queryMonthlyBilling(await readJson(request), user, tenantMappings, invoiceProvider);
+        const monthly = await queryMonthlyBilling(await readJson(request), user, tenantMappings, invoiceProvider, sourceSnapshots, "monthly_billing_export");
         if (monthly.status !== "completed") {
           recordRun(runStore, user, "monthly_billing_export", monthly.status, startedAt, 0);
           return sendJson(response, monthly.status === "configuration_required" ? 422 : 503, { status: monthly.status, workflowId: "monthly_billing_query" });
@@ -474,7 +485,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
           exportType: "monthly_billing",
           request: { month: range.month }
         });
-        scheduleMonthlyBillingExport({ task, request: { month: range.month }, user, tenantMappings, invoiceProvider, exportTasks, runStore });
+        scheduleMonthlyBillingExport({ task, request: { month: range.month }, user, tenantMappings, invoiceProvider, exportTasks, runStore, sourceSnapshots });
         return sendJson(response, 202, { status: "queued", task });
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
@@ -491,7 +502,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       if (!exportTasks) return sendJson(response, 503, { status: "export_unavailable" });
       const retried = exportTasks.retry(user?.tenantId || "public", decodeURIComponent(exportRetryMatch[1]));
       if (!retried || retried.task.exportType !== "monthly_billing") return sendJson(response, 404, { status: "not_found" });
-      scheduleMonthlyBillingExport({ task: retried.task, request: retried.request, user, tenantMappings, invoiceProvider, exportTasks, runStore });
+      scheduleMonthlyBillingExport({ task: retried.task, request: retried.request, user, tenantMappings, invoiceProvider, exportTasks, runStore, sourceSnapshots });
       return sendJson(response, 202, { status: "queued", task: retried.task });
     }
 

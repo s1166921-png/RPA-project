@@ -52,6 +52,7 @@ function clientInvoice(invoice, queriedAt) {
     remainingAmount: String(invoice.remainingAmount || "0.00"),
     status: String(invoice.status || ""),
     source: String(invoice.source || ""),
+    sourceSnapshotId: String(invoice.sourceSnapshotId || ""),
     queriedAt
   };
 }

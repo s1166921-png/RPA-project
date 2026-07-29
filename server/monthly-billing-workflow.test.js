@@ -17,6 +17,7 @@ test("builds a customer-safe monthly bill with exact currency totals", () => {
   assert.deepEqual(result.totals, [{ currency: "CNY", totalAmount: "13.00", paidAmount: "3.00", remainingAmount: "10.00" }]);
   assert.equal(result.items[0].invoiceUserId, undefined);
   assert.equal(result.items[0].queriedAt, "2026-07-29T00:00:00.000Z");
+  assert.equal(result.items[0].sourceSnapshotId, "");
 });
 
 test("accepts only a calendar month input", () => {

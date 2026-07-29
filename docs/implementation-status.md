@@ -19,7 +19,7 @@
 - Async export center with tenant-scoped task status, download, and retry for month-billing files.
 - Admin-only production source readiness check that validates the invoice template without exposing credentials or template contents.
 - Persistent portal customer accounts managed by administrators, with hashed passwords and tenant/customer-code scope.
-- Tenant-scoped source snapshot metadata IDs on successful waybill queries and exports; customer output contains only the ID, source, and query time, never raw third-party payloads.
+- Tenant-scoped source snapshot metadata IDs on successful waybill and monthly-billing queries/exports; customer output contains only the ID, source, and query time, never raw third-party payloads.
 
 ## Runtime modes
 

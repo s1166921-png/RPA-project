@@ -218,6 +218,31 @@ test("queries only mapped monthly invoices and omits source user identifiers", a
   assert.deepEqual(response.body.totals, [{ currency: "CNY", totalAmount: "12.00", paidAmount: "2.00", remainingAmount: "10.00" }]);
 });
 
+test("adds one tenant-scoped source snapshot to a monthly billing query", async (t) => {
+  const stores = createSqliteStores({ filename: ":memory:", newId: () => "monthly-snapshot" });
+  const auth = authForTests();
+  const server = await start({ async findByWaybill() { return null; } }, {
+    auth,
+    requireAuth: true,
+    sourceSnapshots: stores.sourceSnapshots,
+    invoiceProvider: {
+      async findByMonth() {
+        return [{ invoiceUserId: "101", invoiceNumber: "INV-A", invoiceDate: "2026-07-02", currency: "CNY", totalAmount: "12.00", paidAmount: "2.00", remainingAmount: "10.00", status: "unpaid", source: "test invoice source" }];
+      }
+    },
+    tenantMappings: createTenantMappingStore([{ tenantId: "tenant-a", customerCodes: ["CUST-A"], invoiceUserIds: ["101"] }])
+  });
+  t.after(() => { server.close(); stores.close(); });
+
+  const login = await request(server, { username: "client-a", password: "pass-a" }, "/api/auth/login");
+  const response = await request(server, { month: "2026-07" }, "/api/workflows/monthly-billing-query", { authorization: `Bearer ${login.body.token}` });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.items[0].sourceSnapshotId, "monthly-snapshot");
+  assert.deepEqual(stores.sourceSnapshots.list("tenant-a"), [{
+    id: "monthly-snapshot", source: "test invoice source", queryType: "monthly_billing_query", queriedAt: stores.sourceSnapshots.list("tenant-a")[0].queriedAt
+  }]);
+});
+
 test("exports only the authenticated tenant's monthly bill", async (t) => {
   const auth = authForTests();
   const server = await start({ async findByWaybill() { return null; } }, {

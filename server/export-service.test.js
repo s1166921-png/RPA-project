@@ -64,6 +64,6 @@ test("builds fixed monthly bill export columns without internal user identifiers
     }]
   });
 
-  assert.deepEqual(rows[0], ["\u8d26\u5355\u6708\u4efd", "\u8d26\u5355\u53f7", "\u8d26\u5355\u65e5\u671f", "\u5e01\u79cd", "\u5e94\u6536", "\u5df2\u4ed8", "\u672a\u4ed8", "\u72b6\u6001", "\u6570\u636e\u6765\u6e90", "\u67e5\u8be2\u65f6\u95f4"]);
-  assert.deepEqual(rows[1], ["2026-07", "INV-001", "2026-07-02", "CNY", "12.00", "2.00", "10.00", "unpaid", "New Wisdom", "2026-07-29T00:00:00.000Z"]);
+  assert.deepEqual(rows[0], ["\u8d26\u5355\u6708\u4efd", "\u8d26\u5355\u53f7", "\u8d26\u5355\u65e5\u671f", "\u5e01\u79cd", "\u5e94\u6536", "\u5df2\u4ed8", "\u672a\u4ed8", "\u72b6\u6001", "\u6570\u636e\u6765\u6e90", "\u67e5\u8be2\u65f6\u95f4", "\u6765\u6e90\u5feb\u7167ID"]);
+  assert.deepEqual(rows[1], ["2026-07", "INV-001", "2026-07-02", "CNY", "12.00", "2.00", "10.00", "unpaid", "New Wisdom", "2026-07-29T00:00:00.000Z", ""]);
 });
