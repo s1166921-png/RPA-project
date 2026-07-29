@@ -6,6 +6,8 @@ const { lookupWaybills, parseWaybillNumbers } = require("./batch-lookup-service"
 const { buildExportRows, buildBatchExportRows } = require("./export-service");
 const { createXlsxExport } = require("./export-workbook");
 
+const MAX_BATCH_RESULTS = 50;
+
 function sendJson(response, status, body) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   response.end(JSON.stringify(body));
@@ -87,7 +89,7 @@ function createServer({ provider, staticRoot }) {
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
       }
-      if (!Array.isArray(body.results) || body.results.length === 0 || !body.results.every(isValidBatchExportResult)) {
+      if (!Array.isArray(body.results) || body.results.length === 0 || body.results.length > MAX_BATCH_RESULTS || !body.results.every(isValidBatchExportResult)) {
         return sendJson(response, 400, { status: "invalid_input" });
       }
       try {

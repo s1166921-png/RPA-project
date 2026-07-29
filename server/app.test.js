@@ -67,6 +67,24 @@ test("runs a batch lookup and retains found and missing statuses", async (t) => 
   assert.deepEqual(response.body.results.map((result) => result.status), ["found", "not_found"]);
 });
 
+test("keeps later batch lookup results after a source failure", async (t) => {
+  const server = await start({
+    async findByWaybill(value) {
+      if (value === "MO-BROKEN") throw new Error("unavailable");
+      return { waybill_number: value };
+    }
+  });
+  t.after(() => server.close());
+
+  const response = await request(server, {
+    waybillNumbers: ["MO-FIRST", "MO-BROKEN", "MO-LAST"]
+  }, "/api/shipments/batch-lookup");
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.results.map((result) => result.status), ["found", "source_unavailable", "found"]);
+  assert.deepEqual(response.body.results.map((result) => result.waybillNumber || result.shipment.waybillNumber), ["MO-FIRST", "MO-BROKEN", "MO-LAST"]);
+});
+
 test("rejects invalid batch lookup input", async (t) => {
   const server = await start({ async findByWaybill() { return null; } });
   t.after(() => server.close());
@@ -110,6 +128,18 @@ test("rejects an empty batch export", async (t) => {
   const response = await request(server, { results: [] }, "/api/exports/batch-waybills");
   assert.equal(response.status, 400);
   assert.equal(response.body.status, "invalid_input");
+});
+
+test("rejects a batch export larger than 50 results", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } });
+  t.after(() => server.close());
+  const results = Array.from({ length: 51 }, (_, index) => ({
+    status: "not_found",
+    waybillNumber: `MO${index}`
+  }));
+
+  const response = await download(server, { results }, "/api/exports/batch-waybills");
+  assert.equal(response.status, 400);
 });
 
 test("rejects a malformed batch export result", async (t) => {
