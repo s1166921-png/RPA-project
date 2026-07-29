@@ -94,6 +94,15 @@ function recordAudit(auditLogs, user, action, outcome) {
   });
 }
 
+function isExpensiveRequest(request) {
+  return request.method === "POST" && (
+    request.url.startsWith("/api/shipments/") ||
+    request.url.startsWith("/api/workflows/") ||
+    request.url === "/api/assistant/message" ||
+    request.url.startsWith("/api/exports/")
+  );
+}
+
 function attachMonthlySourceSnapshot(invoices, user, sourceSnapshots, queryType) {
   if (!sourceSnapshots || invoices.length === 0) return invoices;
   const snapshot = sourceSnapshots.create({
@@ -142,7 +151,7 @@ function scheduleMonthlyBillingExport({ task, request, user, tenantMappings, inv
   });
 }
 
-function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null, portalUsers = null, sourceSnapshots = null, auditLogs = null }) {
+function createServer({ provider, invoiceProvider = null, staticRoot, auth = null, requireAuth = false, runStore = null, tenantMappings = null, exportTasks = null, sourceReadiness = null, portalUsers = null, sourceSnapshots = null, auditLogs = null, rateLimiter = null }) {
   if (runStore && auditLogs) {
     const baseRunStore = runStore;
     runStore = {
@@ -178,6 +187,15 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
     if (requireAuth && request.url.startsWith("/api/")) {
       user = auth?.verify(bearerToken(request));
       if (!user) return sendJson(response, 401, { status: "authentication_required" });
+    }
+
+    if (rateLimiter && isExpensiveRequest(request)) {
+      const limit = rateLimiter.consume(`${user?.tenantId || "public"}:${user?.username || "anonymous"}`);
+      if (!limit.allowed) {
+        recordAudit(auditLogs, user, "request:rate_limited", "rejected");
+        response.setHeader("retry-after", String(limit.retryAfterSeconds));
+        return sendJson(response, 429, { status: "rate_limited", retryAfterSeconds: limit.retryAfterSeconds });
+      }
     }
 
     if (request.method === "GET" && request.url === "/api/workflow/runs") {

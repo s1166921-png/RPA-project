@@ -7,6 +7,7 @@ const { createAuthService, hashPassword } = require("./auth-service");
 const { createWorkflowRunStore } = require("./workflow-run-store");
 const { createTenantMappingStore } = require("./tenant-mapping-store");
 const { createSqliteStores } = require("./sqlite-stores");
+const { createRequestRateLimiter } = require("./request-rate-limiter");
 
 async function start(provider, options = {}) {
   const server = createServer({ provider, staticRoot: __dirname + "/..", ...options });
@@ -384,6 +385,32 @@ test("runs a batch lookup and retains found and missing statuses", async (t) => 
   assert.equal(response.status, 200);
   assert.equal(response.body.status, "completed");
   assert.deepEqual(response.body.results.map((result) => result.status), ["found", "not_found"]);
+});
+
+test("rate limits costly requests per authenticated tenant identity", async (t) => {
+  const auth = createAuthService({
+    secret: "rate-limit-secret",
+    users: [
+      { username: "client-a", passwordHash: hashPassword("pass-a"), tenantId: "tenant-a", allowedCustomerCodes: ["CUST-A"] },
+      { username: "client-b", passwordHash: hashPassword("pass-b"), tenantId: "tenant-b", allowedCustomerCodes: ["CUST-B"] }
+    ]
+  });
+  const limiter = createRequestRateLimiter({ maxRequests: 1, windowMs: 60_000 });
+  const server = await start({ async findByWaybill(value) { return { waybill_number: value, customer_code: value === "MO-B" ? "CUST-B" : "CUST-A" }; } }, {
+    auth, requireAuth: true, rateLimiter: limiter
+  });
+  t.after(() => server.close());
+
+  const login = await request(server, { username: "client-a", password: "pass-a" }, "/api/auth/login");
+  const headers = { authorization: `Bearer ${login.body.token}` };
+  const first = await request(server, { waybillNumbers: ["MO-A"] }, "/api/shipments/batch-lookup", headers);
+  assert.equal(first.status, 200);
+  const limited = await request(server, { waybillNumbers: ["MO-A"] }, "/api/shipments/batch-lookup", headers);
+  assert.equal(limited.status, 429);
+  assert.equal(limited.body.status, "rate_limited");
+  const otherLogin = await request(server, { username: "client-b", password: "pass-b" }, "/api/auth/login");
+  const other = await request(server, { waybillNumbers: ["MO-B"] }, "/api/shipments/batch-lookup", { authorization: `Bearer ${otherLogin.body.token}` });
+  assert.equal(other.status, 200);
 });
 
 test("adds tenant-scoped source snapshot IDs only to authorized found results", async (t) => {

@@ -12,6 +12,7 @@ const { createAuditedProvider } = require("./audit-log");
 const { loadTenantMappings } = require("./tenant-mapping-store");
 const { createSqliteStores } = require("./sqlite-stores");
 const { getListenOptions } = require("./server-config");
+const { createRequestRateLimiter } = require("./request-rate-limiter");
 
 const { port, host } = getListenOptions();
 const useNewWisdom = process.env.LOOKUP_PROVIDER === "new-wisdom";
@@ -66,6 +67,10 @@ const sourceReadiness = {
   enabled: invoiceSourceConfig.enabled,
   reason: invoiceSourceConfig.reason
 };
-const server = createServer({ provider, invoiceProvider, auth, requireAuth, runStore, tenantMappings, exportTasks, sourceReadiness, portalUsers, sourceSnapshots, auditLogs, staticRoot: path.resolve(__dirname, "..") });
+const rateLimiter = createRequestRateLimiter({
+  maxRequests: Number(process.env.PORTAL_REQUEST_LIMIT || 60),
+  windowMs: Number(process.env.PORTAL_REQUEST_WINDOW_MS || 60_000)
+});
+const server = createServer({ provider, invoiceProvider, auth, requireAuth, runStore, tenantMappings, exportTasks, sourceReadiness, portalUsers, sourceSnapshots, auditLogs, rateLimiter, staticRoot: path.resolve(__dirname, "..") });
 server.once("close", () => stores.close());
 server.listen(port, host, () => console.log(`Waybill portal: http://${host}:${port}`));
