@@ -195,7 +195,7 @@ async function downloadBatchExport() {
     const response = await apiFetch("/api/exports/batch-waybills", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ results: currentBatch })
+      body: JSON.stringify({ waybillNumbers: currentInput })
     });
     if (!response.ok) return setMessage("批量导出失败，请稍后重试。", "error");
     const url = URL.createObjectURL(await response.blob());

@@ -210,6 +210,22 @@ test("downloads one xlsx file for batch query results", async (t) => {
   assert.equal(response.body.subarray(0, 2).toString(), "PK");
 });
 
+test("builds a batch export from server-side waybill lookups", async (t) => {
+  let calls = 0;
+  const server = await start({
+    async findByWaybill(value) {
+      calls += 1;
+      return { waybill_number: value, service: "源数据服务", sell_charge_amount: "100.00CNY" };
+    }
+  });
+  t.after(() => server.close());
+
+  const response = await download(server, { waybillNumbers: ["MO-SERVER-1"] }, "/api/exports/batch-waybills");
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+  assert.match(response.disposition, /^attachment; filename="waybill-batch-/);
+});
+
 test("rejects an empty batch export", async (t) => {
   const server = await start({ async findByWaybill() { return null; } });
   t.after(() => server.close());

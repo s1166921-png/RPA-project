@@ -200,6 +200,14 @@ function createServer({ provider, staticRoot, auth = null, requireAuth = false }
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });
       }
+      if (Array.isArray(body.waybillNumbers) || typeof body.waybillNumbers === "string") {
+        const parsed = parseWaybillNumbers(body.waybillNumbers);
+        const result = await lookupWaybills(body.waybillNumbers, provider);
+        if (result.status !== "completed") return sendJson(response, 400, result);
+        body.results = addRequestedWaybillNumbers(result.results.map((item) => protectResult(item, user, auth)), parsed.waybillNumbers);
+      } else if (requireAuth) {
+        return sendJson(response, 404, { status: "not_found" });
+      }
       if (!Array.isArray(body.results) || body.results.length === 0 || body.results.length > MAX_BATCH_RESULTS || !body.results.every(isValidBatchExportResult)) {
         return sendJson(response, 400, { status: "invalid_input" });
       }
