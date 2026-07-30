@@ -279,12 +279,19 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         const username = decodeURIComponent(portalUserMatch[1]);
         const existing = portalUsers.get(username);
         const body = await readJson(request);
-        if (!existing || existing.role !== "customer" || typeof body.enabled !== "boolean") {
+        const updatesEnabled = typeof body.enabled === "boolean";
+        const updatesPassword = Object.hasOwn(body, "password");
+        const password = String(body.password || "");
+        if (!existing || existing.role !== "customer" || (!updatesEnabled && !updatesPassword) || (updatesPassword && password.length < 8)) {
           return sendJson(response, 400, { status: "invalid_input" });
         }
-        const stored = portalUsers.upsert({ ...existing, enabled: body.enabled });
+        const stored = portalUsers.upsert({
+          ...existing,
+          enabled: updatesEnabled ? body.enabled : existing.enabled,
+          passwordHash: updatesPassword ? hashPassword(password) : existing.passwordHash
+        });
         const { passwordHash, ...publicUser } = stored;
-        recordAudit(auditLogs, user, "operations:update_customer_status", body.enabled ? "enabled" : "disabled");
+        recordAudit(auditLogs, user, updatesPassword ? "operations:reset_customer_password" : "operations:update_customer_status", updatesPassword ? "completed" : body.enabled ? "enabled" : "disabled");
         return sendJson(response, 200, { status: "updated", user: publicUser });
       } catch {
         return sendJson(response, 400, { status: "invalid_input" });

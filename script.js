@@ -287,7 +287,38 @@ async function loadOperations() {
           toggle.disabled = false;
         }
       });
-      item.append(detail, toggle);
+      const password = document.createElement("input");
+      password.type = "password";
+      password.autocomplete = "new-password";
+      password.minLength = 8;
+      password.placeholder = "新密码";
+      password.setAttribute("aria-label", `New password ${user.username}`);
+      const reset = document.createElement("button");
+      reset.type = "button";
+      reset.textContent = "保存密码";
+      reset.setAttribute("aria-label", `Reset password ${user.username}`);
+      reset.addEventListener("click", async () => {
+        if (password.value.length < 8) {
+          portalUserResult.textContent = "新密码至少需要 8 个字符。";
+          return;
+        }
+        reset.disabled = true;
+        try {
+          const response = await apiFetch(`/api/operations/users/${encodeURIComponent(user.username)}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ password: password.value })
+          });
+          if (!response.ok) throw new Error("portal password reset failed");
+          password.value = "";
+          await loadOperations();
+        } catch {
+          portalUserResult.textContent = "客户密码重置失败，请稍后重试。";
+        } finally {
+          reset.disabled = false;
+        }
+      });
+      item.append(detail, toggle, password, reset);
       portalUserResult.append(item);
     });
     auditLogs.logs.slice(0, 10).forEach((log) => {

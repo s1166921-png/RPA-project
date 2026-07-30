@@ -20,6 +20,7 @@
 - Admin-only production source readiness check that validates the invoice template without exposing credentials or template contents.
 - Persistent portal customer accounts managed by administrators, with hashed passwords and tenant/customer-code scope.
 - Admin-only customer account enable/disable controls; disabled accounts cannot obtain new sessions and existing tokens are rejected on their next API request.
+- Admin-only customer password reset; the previous password is invalidated immediately and no password value is displayed or audited.
 - Persistent audit summaries for authentication, workflow execution, export actions, and administrator configuration, without passwords, waybill numbers, bill contents, or raw source payloads.
 - Fixed workflow registry now records approved inputs, data sources, validation rules, output types, and read-only status for each customer-visible capability.
 - Identity-scoped rate limiting protects high-cost source queries, workflows, AI tool calls, and exports from exhausting the upstream platform.

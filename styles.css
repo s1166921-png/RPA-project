@@ -179,7 +179,9 @@ textarea {
 .tenant-mapping-form label { font-weight: 700; }
 .tenant-mapping-form input { min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .portal-user-result { display: grid; gap: 8px; margin-top: 16px; color: var(--muted); }
-.portal-user-item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+.portal-user-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+.portal-user-item span { flex: 1 1 220px; }
+.portal-user-item input { min-height: 36px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
 .portal-user-form { display: grid; gap: 8px; margin-top: 14px; max-width: 560px; }
 .portal-user-form label { font-weight: 700; }
 .portal-user-form input { min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }

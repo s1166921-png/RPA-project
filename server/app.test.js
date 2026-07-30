@@ -199,6 +199,13 @@ test("allows only an administrator to manage local tenant mappings", async (t) =
   const disabledLogin = await request(server, { username: "client-new", password: "client-password" }, "/api/auth/login");
   assert.equal(disabledLogin.status, 401);
 
+  const reset = await request(server, { enabled: true, password: "replacement-password" }, "/api/operations/users/client-new", adminHeaders, "PATCH");
+  assert.equal(reset.status, 200);
+  const oldPasswordLogin = await request(server, { username: "client-new", password: "client-password" }, "/api/auth/login");
+  assert.equal(oldPasswordLogin.status, 401);
+  const resetPasswordLogin = await request(server, { username: "client-new", password: "replacement-password" }, "/api/auth/login");
+  assert.equal(resetPasswordLogin.status, 200);
+
   const existingCustomerLogin = await request(server, { username: "customer", password: "customer-pass" }, "/api/auth/login");
   const denied = await get(server, "/api/operations/tenant-mappings", { authorization: `Bearer ${existingCustomerLogin.body.token}` });
   assert.equal(denied.status, 403);
