@@ -35,6 +35,8 @@ button {
 button:hover { filter: brightness(0.95); }
 
 .app-shell {
+  display: flex;
+  flex-direction: column;
   width: min(920px, 100%);
   margin: 0 auto;
   padding: 28px 20px 48px;
@@ -47,6 +49,16 @@ button:hover { filter: brightness(0.95); }
   min-height: 48px;
   margin-bottom: 28px;
 }
+
+.topbar { order: 0; }
+.lookup-panel { order: 1; }
+.assistant-panel { order: 2; }
+.monthly-billing-panel { order: 3; }
+.result-panel { order: 4; }
+.workflow-catalog { order: 5; }
+.history-panel { order: 6; }
+.export-center { order: 7; }
+.operations-panel { order: 8; }
 
 .topbar strong { font-size: 18px; }
 

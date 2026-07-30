@@ -25,6 +25,7 @@
 - Fixed workflow registry now records approved inputs, data sources, validation rules, output types, and read-only status for each customer-visible capability.
 - Identity-scoped rate limiting protects high-cost source queries, workflows, AI tool calls, and exports from exhausting the upstream platform.
 - Credential-free liveness endpoint and a deployment checklist covering authentication, durable storage, source readiness, tenant validation, and the read-only boundary.
+- Customer portal layout prioritizes the multi-waybill query form in the first viewport; workflow catalog remains available below the primary query tools.
 - Tenant-scoped source snapshot metadata IDs on successful waybill and monthly-billing queries/exports; customer output contains only the ID, source, and query time, never raw third-party payloads.
 
 ## Runtime modes
