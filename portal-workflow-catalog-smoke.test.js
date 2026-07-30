@@ -12,6 +12,7 @@ async function run() {
   const page = await browser.newPage();
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page.evaluate(() => window.enableFullPortalMode());
     await page.locator(".workflow-definition").nth(4).waitFor();
     assert.equal(await page.locator(".workflow-definition").count(), 6);
     assert.match(await page.locator("#workflowCatalog").innerText(), /物流轨迹查询/);

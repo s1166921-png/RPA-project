@@ -5,10 +5,10 @@ const { createServer } = require("./server/app");
 async function layout(page) {
   return page.evaluate(() => {
     const lookup = document.querySelector(".lookup-panel").getBoundingClientRect();
-    const catalog = document.querySelector(".workflow-catalog").getBoundingClientRect();
+    const catalog = document.querySelector(".workflow-catalog");
     return {
       lookupTop: lookup.top,
-      catalogTop: catalog.top,
+      catalogDisplay: getComputedStyle(catalog).display,
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth,
       lookupRight: lookup.right
@@ -27,11 +27,13 @@ async function run() {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     const desktop = await layout(page);
-    assert.ok(desktop.lookupTop < desktop.catalogTop);
+    assert.equal(desktop.catalogDisplay, "none");
+    assert.ok(desktop.lookupTop < 200);
 
     await page.setViewportSize({ width: 390, height: 844 });
     const mobile = await layout(page);
-    assert.ok(mobile.lookupTop < mobile.catalogTop);
+    assert.equal(mobile.catalogDisplay, "none");
+    assert.ok(mobile.lookupTop < 200);
     assert.ok(mobile.documentWidth <= mobile.viewportWidth);
     assert.ok(mobile.lookupRight <= mobile.viewportWidth);
     console.log(JSON.stringify({ portalLayoutUserPath: "passed", lookupFirstViewport: "passed", mobileOverflow: "none" }));

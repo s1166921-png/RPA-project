@@ -26,6 +26,7 @@ async function run() {
   try {
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page.evaluate(() => window.enableFullPortalMode());
     await page.locator("#loginUsername").fill("customer");
     await page.locator("#loginPassword").fill("customer-pass");
     await page.locator("#loginForm button").click();

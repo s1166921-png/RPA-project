@@ -20,6 +20,22 @@ body {
   font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
 }
 
+/* Current rollout: direct waybill lookup only. Other completed capabilities stay available for later workflow phases. */
+.simple-query-mode .login-panel,
+.simple-query-mode .assistant-panel,
+.simple-query-mode .monthly-billing-panel,
+.simple-query-mode .workflow-catalog,
+.simple-query-mode .history-panel,
+.simple-query-mode .export-center,
+.simple-query-mode .operations-panel {
+  display: none !important;
+}
+
+.simple-query-mode #billingWeightWorkflow,
+.simple-query-mode #downloadBatchExport {
+  display: none !important;
+}
+
 button, textarea { font: inherit; }
 
 button {

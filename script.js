@@ -35,6 +35,7 @@ const exportsRefresh = document.querySelector("#exportsRefresh");
 const exportTasks = document.querySelector("#exportTasks");
 let authToken = sessionStorage.getItem("portalAuthToken") || "";
 let currentUser = null;
+const simpleQueryMode = document.body.classList.contains("simple-query-mode");
 
 function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -59,7 +60,8 @@ async function loadCurrentUser() {
   return payload.user;
 }
 
-async function initializeAuth() {
+async function initializeAuth(force = false) {
+  if (simpleQueryMode && !force) return;
   try {
     const response = await fetch("/api/auth/config");
     const config = await response.json();
@@ -80,6 +82,13 @@ async function initializeAuth() {
 }
 
 initializeAuth();
+
+// Keeps the completed internal workspace testable while the public rollout is direct lookup only.
+window.enableFullPortalMode = async () => {
+  document.body.classList.remove("simple-query-mode");
+  await initializeAuth(true);
+  await loadWorkflowCatalog();
+};
 
 async function loadWorkflowCatalog() {
   try {
@@ -106,7 +115,7 @@ async function loadWorkflowCatalog() {
   }
 }
 
-loadWorkflowCatalog();
+if (!simpleQueryMode) loadWorkflowCatalog();
 
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

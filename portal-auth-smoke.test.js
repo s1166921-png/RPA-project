@@ -23,6 +23,7 @@ async function run() {
   const page = await browser.newPage();
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page.evaluate(() => window.enableFullPortalMode());
     await page.locator("#loginPanel").waitFor();
     await page.locator("#loginUsername").fill("client-a");
     await page.locator("#loginPassword").fill("wrong");

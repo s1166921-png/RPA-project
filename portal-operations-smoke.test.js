@@ -34,6 +34,7 @@ async function run() {
   try {
     const adminPage = await browser.newPage();
     await adminPage.goto(`http://127.0.0.1:${server.address().port}`);
+    await adminPage.evaluate(() => window.enableFullPortalMode());
     await login(adminPage, "admin", "admin-pass");
     await adminPage.locator("#operationsPanel").waitFor({ state: "visible", timeout: 10_000 });
     await adminPage.locator(".workflow-definition").nth(4).waitFor({ timeout: 10_000 });

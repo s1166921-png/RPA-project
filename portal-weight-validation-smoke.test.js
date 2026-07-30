@@ -16,6 +16,7 @@ async function run() {
   const page = await browser.newPage();
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page.evaluate(() => window.enableFullPortalMode());
     await page.locator("#assistantMessage").fill("MO10083334 \u8ba1\u91cd\u6821\u9a8c");
     await page.locator("#assistantForm button").click();
     const item = page.locator('.weight-validation-item[data-waybill="MO10083334"]');

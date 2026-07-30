@@ -31,6 +31,7 @@ async function run() {
   });
   try {
     await page.goto(`http://127.0.0.1:${address.port}`);
+    await page.evaluate(() => window.enableFullPortalMode());
     await page.locator("#waybillNumbers").fill("MO10083334\nMISSING-1");
     await page.locator("#lookupForm button").click();
     await expectText(page, "#lookupResult", "\u6b63\u5728\u67e5\u8be2 2 \u4e2a\u5355\u53f7");

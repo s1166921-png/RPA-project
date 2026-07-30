@@ -31,6 +31,7 @@
 ## Runtime modes
 
 - Default development mode keeps direct read-only lookup for local prototyping.
+- Current rollout uses `simple-query-mode`: customers enter a waybill directly and see the query result; login, tenant isolation, AI, billing, exports, and operational controls are intentionally hidden until the next workflow phase.
 - Set `AUTH_REQUIRED=true`, `AUTH_TOKEN_SECRET`, and `PORTAL_USERS_JSON` before customer deployment.
 - Keep New Wisdom credentials in environment or a secret manager. Never put them in source, browser code, or logs.
 

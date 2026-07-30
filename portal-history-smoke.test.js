@@ -14,6 +14,7 @@ async function run() {
   const page = await browser.newPage();
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page.evaluate(() => window.enableFullPortalMode());
     await page.locator("#historyButton").click();
     await page.waitForFunction(() => document.querySelector("#historyResult").innerText.includes("暂无查询记录"));
     await page.locator("#waybillNumbers").fill("MO-HISTORY-1");
