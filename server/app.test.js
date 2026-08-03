@@ -119,6 +119,27 @@ test("exposes a credential-free liveness health check", async (t) => {
   assert.deepEqual(response, { status: 200, body: { status: "ok" } });
 });
 
+test("uses the logged-in tenant's provider rather than a shared provider", async (t) => {
+  const calls = [];
+  const router = {
+    forTenant(tenantId) {
+      return {
+        async findByWaybill(waybillNumber) {
+          calls.push(tenantId);
+          return { waybill_number: waybillNumber, customer_code: "CUST-A" };
+        }
+      };
+    }
+  };
+  const auth = authForTests();
+  const server = await start(router, { auth, requireAuth: true });
+  t.after(() => server.close());
+  const login = auth.login("client-a", "pass-a");
+  const response = await request(server, { waybillNumber: "MO-TENANT" }, "/api/shipments/lookup", { authorization: `Bearer ${login.token}` });
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, ["tenant-a"]);
+});
+
 test("serves the customer-safe workflow catalog", async (t) => {
   const server = await start({ async findByWaybill() { return null; } });
   t.after(() => server.close());

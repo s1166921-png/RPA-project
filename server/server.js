@@ -6,6 +6,7 @@ const { createSampleInvoiceProvider } = require("./providers/sample-invoice-prov
 const { createNewWisdomInvoiceProvider } = require("./providers/new-wisdom-invoice-provider");
 const { inspectInvoiceSourceConfig } = require("./invoice-source-config");
 const { createNewWisdomApiProvider } = require("./providers/new-wisdom-api-provider");
+const { createTenantNewWisdomProviderRouter, loadTenantApiTokens } = require("./providers/tenant-new-wisdom-provider-router");
 const { createCachedProvider } = require("./provider-cache");
 const { createAuthService, loadUsers } = require("./auth-service");
 const { createAuditedProvider } = require("./audit-log");
@@ -17,16 +18,25 @@ const { createRequestRateLimiter } = require("./request-rate-limiter");
 const { port, host } = getListenOptions();
 const useNewWisdom = process.env.LOOKUP_PROVIDER === "new-wisdom";
 const requireAuth = process.env.AUTH_REQUIRED === "true";
-const sourceProvider = useNewWisdom
+const tenantApiTokens = process.env.TENANT_NEW_WISDOM_TOKENS_JSON
+  ? loadTenantApiTokens(process.env.TENANT_NEW_WISDOM_TOKENS_JSON)
+  : null;
+const sourceProvider = tenantApiTokens
+  ? createTenantNewWisdomProviderRouter({ tokensByTenant: tenantApiTokens, baseUrl: process.env.NEXTSLS_API_BASE_URL })
+  : useNewWisdom
   ? createNewWisdomApiProvider({
       accessToken: process.env.NEXTSLS_API_TOKEN,
       baseUrl: process.env.NEXTSLS_API_BASE_URL
     })
   : createSampleProvider();
-const auditedProvider = createAuditedProvider(sourceProvider, {
+const auditedProvider = typeof sourceProvider.forTenant === "function"
+  ? sourceProvider
+  : createAuditedProvider(sourceProvider, {
   sink: process.env.AUDIT_LOG === "console" ? (event) => console.log(JSON.stringify(event)) : undefined
 });
-const provider = createCachedProvider(auditedProvider, {
+const provider = typeof auditedProvider.forTenant === "function"
+  ? auditedProvider
+  : createCachedProvider(auditedProvider, {
   ttlMs: Number(process.env.LOOKUP_CACHE_TTL_MS || 30_000),
   maxEntries: Number(process.env.LOOKUP_CACHE_MAX_ENTRIES || 1_000)
 });

@@ -94,6 +94,12 @@ function recordAudit(auditLogs, user, action, outcome) {
   });
 }
 
+function providerForUser(provider, user) {
+  return typeof provider?.forTenant === "function"
+    ? provider.forTenant(user?.tenantId || "public")
+    : provider;
+}
+
 function isExpensiveRequest(request) {
   return request.method === "POST" && (
     request.url.startsWith("/api/shipments/") ||
@@ -192,6 +198,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       user = auth?.verify(bearerToken(request));
       if (!user) return sendJson(response, 401, { status: "authentication_required" });
     }
+    const activeProvider = providerForUser(provider, user);
 
     if (rateLimiter && isExpensiveRequest(request)) {
       const limit = rateLimiter.consume(`${user?.tenantId || "public"}:${user?.username || "anonymous"}`);
@@ -312,7 +319,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
 
     if (request.method === "POST" && request.url === "/api/shipments/lookup") {
       try {
-        const result = addSourceSnapshots([protectResult(await lookupWaybill(await readJson(request), provider), user, auth)], user, sourceSnapshots, "waybill_lookup")[0];
+        const result = addSourceSnapshots([protectResult(await lookupWaybill(await readJson(request), activeProvider), user, auth)], user, sourceSnapshots, "waybill_lookup")[0];
         const status = { found: 200, invalid_input: 400, not_found: 404, source_unavailable: 502 }[result.status];
         return sendJson(response, status, result);
       } catch {
@@ -325,7 +332,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
-        const result = await lookupWaybills(body.waybillNumbers, provider);
+        const result = await lookupWaybills(body.waybillNumbers, activeProvider);
         if (result.status !== "completed") {
           recordRun(runStore, user, "waybill_lookup", result.status, startedAt, 0);
           return sendJson(response, 400, result);
@@ -345,7 +352,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
-        const result = await lookupWaybills(body.waybillNumbers, provider);
+        const result = await lookupWaybills(body.waybillNumbers, activeProvider);
         if (result.status !== "completed") {
           recordRun(runStore, user, "billing_weight_confirmation", result.status, startedAt, 0);
           return sendJson(response, 400, result);
@@ -362,7 +369,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
-        const result = await lookupWaybills(body.waybillNumbers, provider);
+        const result = await lookupWaybills(body.waybillNumbers, activeProvider);
         if (result.status !== "completed") {
           recordRun(runStore, user, "shipment_tracking", result.status, startedAt, 0);
           return sendJson(response, 400, result);
@@ -380,7 +387,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
-        const result = await lookupWaybills(body.waybillNumbers, provider);
+        const result = await lookupWaybills(body.waybillNumbers, activeProvider);
         if (result.status !== "completed") {
           recordRun(runStore, user, "billing_query", result.status, startedAt, 0);
           return sendJson(response, 400, result);
@@ -415,7 +422,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       try {
         const body = await readJson(request);
         const parsed = parseWaybillNumbers(body.waybillNumbers);
-        const result = await lookupWaybills(body.waybillNumbers, provider);
+        const result = await lookupWaybills(body.waybillNumbers, activeProvider);
         if (result.status !== "completed") {
           recordRun(runStore, user, "weight_validation", result.status, startedAt, 0);
           return sendJson(response, 400, result);
@@ -435,32 +442,32 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         const assistant = await handleAssistantMessage(body.message, {
           lookup: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
-            const result = await lookupWaybills(waybillNumbers, provider);
+            const result = await lookupWaybills(waybillNumbers, activeProvider);
             return result.status === "completed"
               ? { ...result, results: prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_lookup") }
               : result;
           },
           billing: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
-            const result = await lookupWaybills(waybillNumbers, provider);
+            const result = await lookupWaybills(waybillNumbers, activeProvider);
             if (result.status !== "completed") return result;
             return runBillingWeightWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_billing_weight"));
           },
           tracking: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
-            const result = await lookupWaybills(waybillNumbers, provider);
+            const result = await lookupWaybills(waybillNumbers, activeProvider);
             if (result.status !== "completed") return result;
             return runShipmentTrackingWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_tracking"));
           },
           billingQuery: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
-            const result = await lookupWaybills(waybillNumbers, provider);
+            const result = await lookupWaybills(waybillNumbers, activeProvider);
             if (result.status !== "completed") return result;
             return runBillingQueryWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_billing_query"));
           },
           weightValidation: async (waybillNumbers) => {
             const parsed = parseWaybillNumbers(waybillNumbers);
-            const result = await lookupWaybills(waybillNumbers, provider);
+            const result = await lookupWaybills(waybillNumbers, activeProvider);
             if (result.status !== "completed") return result;
             return runWeightValidationWorkflow(prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "assistant_weight_validation"));
           },
@@ -480,7 +487,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
 
     if (request.method === "POST" && request.url === "/api/exports/waybill") {
       try {
-        const result = addSourceSnapshots([protectResult(await lookupWaybill(await readJson(request), provider), user, auth)], user, sourceSnapshots, "waybill_export")[0];
+        const result = addSourceSnapshots([protectResult(await lookupWaybill(await readJson(request), activeProvider), user, auth)], user, sourceSnapshots, "waybill_export")[0];
         if (result.status !== "found") {
           const status = { invalid_input: 400, not_found: 404, source_unavailable: 502 }[result.status];
           return sendJson(response, status, result);
@@ -507,7 +514,7 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       }
       if (Array.isArray(body.waybillNumbers) || typeof body.waybillNumbers === "string") {
         const parsed = parseWaybillNumbers(body.waybillNumbers);
-        const result = await lookupWaybills(body.waybillNumbers, provider);
+        const result = await lookupWaybills(body.waybillNumbers, activeProvider);
         if (result.status !== "completed") return sendJson(response, 400, result);
         body.results = prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "batch_waybill_export");
       } else if (requireAuth) {
