@@ -5,7 +5,7 @@ const { createSampleProvider } = require("./providers/sample-provider");
 const { createSampleInvoiceProvider } = require("./providers/sample-invoice-provider");
 const { createNewWisdomInvoiceProvider } = require("./providers/new-wisdom-invoice-provider");
 const { inspectInvoiceSourceConfig } = require("./invoice-source-config");
-const { createNewWisdomProvider } = require("./providers/new-wisdom-provider");
+const { createNewWisdomApiProvider } = require("./providers/new-wisdom-api-provider");
 const { createCachedProvider } = require("./provider-cache");
 const { createAuthService, loadUsers } = require("./auth-service");
 const { createAuditedProvider } = require("./audit-log");
@@ -18,10 +18,9 @@ const { port, host } = getListenOptions();
 const useNewWisdom = process.env.LOOKUP_PROVIDER === "new-wisdom";
 const requireAuth = process.env.AUTH_REQUIRED === "true";
 const sourceProvider = useNewWisdom
-  ? createNewWisdomProvider({
-      username: process.env.NEXTSLS_USERNAME,
-      password: process.env.NEXTSLS_PASSWORD,
-      browserFactory: async () => (await require("playwright")).chromium.launch({ headless: true })
+  ? createNewWisdomApiProvider({
+      accessToken: process.env.NEXTSLS_API_TOKEN,
+      baseUrl: process.env.NEXTSLS_API_BASE_URL
     })
   : createSampleProvider();
 const auditedProvider = createAuditedProvider(sourceProvider, {

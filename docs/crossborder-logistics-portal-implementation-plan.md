@@ -96,7 +96,21 @@ PostgreSQL + Redis + Audit Store
 - 提供 OpenAPI/Swagger 文档、字段字典、请求样例和响应样例。
 - 所有接口返回唯一业务 ID、最后更新时间、数据来源版本或变更时间。
 
-### 4.2 运单查询 API（V1 必须）
+### 4.2 已确认的官方 API（V1 必须）
+
+新智慧 TMS API 5.0 已确认使用 `Authorization: Bearer ACCESS_TOKEN` 鉴权。访问令牌由新智慧在对应用户的 API 密钥中创建；不得使用网页登录密码。
+
+已确认的 V1 查询接口：
+
+| 用途 | 官方接口 | 使用方式 |
+| --- | --- | --- |
+| 运单详情、费用、重量 | `POST /api/v5/shipment/get_info` | 用 `shipment_id` 或 `client_reference` 查询 |
+| 物流轨迹 | `POST /api/v5/shipment/get_tracking` | 用系统运单号、客户单号、转单号、提单号或箱号查询 |
+| 批量与增量运单同步 | `POST /api/v5/shipment/list` | `shipment_id`/`client_reference` 支持逗号分隔；支持 `start_updated`、`end_updated` 和分页 |
+
+下列“建议能力”已由官方接口覆盖，不再需要业务方另行开发同类读取接口。
+
+### 4.3 运单查询 API（V1 必须）
 
 建议能力：
 
@@ -139,7 +153,7 @@ POST /api/shipments/query
 | exception_code / exception_reason | 异常信息 |
 | created_at / updated_at | 数据追溯与增量同步 |
 
-### 4.3 物流轨迹 API（V1 必须）
+### 4.4 物流轨迹 API（V1 必须）
 
 ```http
 GET /api/shipments/{waybillNumber}/tracking
@@ -149,7 +163,7 @@ GET /api/shipments/{waybillNumber}/tracking
 
 要求：轨迹按发生时间排序；状态修正时需提供更新时间或版本号；不可只返回展示文案而没有结构化状态。
 
-### 4.4 增量同步 API（Phase 2 必须）
+### 4.5 增量同步 API（Phase 2 必须）
 
 ```http
 GET /api/shipments/changes?updated_after=2026-08-03T00:00:00Z&cursor=...
@@ -164,13 +178,13 @@ GET /api/tracking-events/changes?updated_after=2026-08-03T00:00:00Z&cursor=...
 - 支持至少 7 天增量补拉窗口，避免同步任务故障后丢数。
 - 最好提供 Webhook，在运单状态或轨迹变化时推送事件。
 
-### 4.5 账单费用 API（Phase 2）
+### 4.6 账单费用 API（Phase 2）
 
 请求维度：客户编码、账期、运单号、费用类型、币种、分页。
 
 必需字段：账单号、账期、运单号、费用类型、金额、币种、税额、应收/已付/未付、费用状态、创建时间、更新时间。
 
-### 4.6 写操作 API（若新智慧提供）
+### 4.7 写操作 API（若新智慧提供）
 
 如新智慧能开放以下 API，应优先使用 API 而不是 RPA：
 
@@ -180,6 +194,8 @@ GET /api/tracking-events/changes?updated_after=2026-08-03T00:00:00Z&cursor=...
 - 查询操作结果和操作日志。
 
 写接口必须支持：幂等键、操作人标识、审批单号、前置版本号、操作日志和明确错误码。
+
+官方 TMS API 5.0 当前已明确提供创建运单、取消订单、修改客户重量尺寸、修改申报信息、上传快递标签和上传附件等写操作。目录中未发现“新增/移除自定义标识”或“修改货物路由”接口；这两类业务在获得新接口前仍由受控 RPA Agent 执行，且必须遵守审批、白名单和回读校验规则。
 
 ## 5. 本地数据库与同步设计
 
