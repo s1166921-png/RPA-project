@@ -193,6 +193,11 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
       return sendJson(response, 200, { enabled: requireAuth });
     }
 
+    if (request.method === "GET" && request.url === "/api/query-source") {
+      const query = sourceReadiness?.query || { mode: "unknown", enabled: false, label: "未配置", reason: "not_configured" };
+      return sendJson(response, 200, { status: "ok", source: query });
+    }
+
     let user = null;
     if (requireAuth && request.url.startsWith("/api/")) {
       user = auth?.verify(bearerToken(request));

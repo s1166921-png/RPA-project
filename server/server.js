@@ -14,14 +14,22 @@ const { loadTenantMappings } = require("./tenant-mapping-store");
 const { createSqliteStores } = require("./sqlite-stores");
 const { getListenOptions } = require("./server-config");
 const { createRequestRateLimiter } = require("./request-rate-limiter");
+const { resolveInternalSourceConfig, createUnavailableProvider } = require("./internal-source-config");
 
 const { port, host } = getListenOptions();
 const useNewWisdom = process.env.LOOKUP_PROVIDER === "new-wisdom";
 const requireAuth = process.env.AUTH_REQUIRED === "true";
+const internalSource = resolveInternalSourceConfig(process.env);
 const tenantApiTokens = process.env.TENANT_NEW_WISDOM_TOKENS_JSON
   ? loadTenantApiTokens(process.env.TENANT_NEW_WISDOM_TOKENS_JSON)
   : null;
-const sourceProvider = tenantApiTokens
+const sourceProvider = internalSource.mode === "central-api"
+  ? internalSource.enabled
+    ? createNewWisdomApiProvider({ accessToken: internalSource.accessToken, baseUrl: process.env.NEXTSLS_API_BASE_URL })
+    : createUnavailableProvider(internalSource.reason)
+  : internalSource.mode === "rpa"
+  ? createUnavailableProvider(internalSource.reason)
+  : tenantApiTokens
   ? createTenantNewWisdomProviderRouter({ tokensByTenant: tenantApiTokens, baseUrl: process.env.NEXTSLS_API_BASE_URL })
   : useNewWisdom
   ? createNewWisdomApiProvider({
@@ -72,6 +80,12 @@ const auth = requireAuth
     })
   : null;
 const sourceReadiness = {
+  query: {
+    mode: internalSource.mode,
+    enabled: internalSource.enabled,
+    label: internalSource.label,
+    reason: internalSource.reason
+  },
   mode: invoiceSourceConfig.mode,
   enabled: invoiceSourceConfig.enabled,
   reason: invoiceSourceConfig.reason

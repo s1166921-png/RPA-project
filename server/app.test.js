@@ -119,6 +119,17 @@ test("exposes a credential-free liveness health check", async (t) => {
   assert.deepEqual(response, { status: 200, body: { status: "ok" } });
 });
 
+test("reports the internal query source without exposing a credential", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } }, {
+    sourceReadiness: { query: { mode: "central-api", enabled: true, label: "新智慧公司级 API", reason: "ready" } }
+  });
+  t.after(() => server.close());
+  const response = await get(server, "/api/query-source");
+  assert.deepEqual(response.body, {
+    status: "ok", source: { mode: "central-api", enabled: true, label: "新智慧公司级 API", reason: "ready" }
+  });
+});
+
 test("uses the logged-in tenant's provider rather than a shared provider", async (t) => {
   const calls = [];
   const router = {
