@@ -49,35 +49,61 @@ function createNewWisdomApiProvider({ accessToken, baseUrl = DEFAULT_BASE_URL, f
     return payload.data || {};
   }
 
+  async function getDetail(query) {
+    try {
+      const detail = await request("/shipment/get_info", {
+        shipment: query
+      });
+      return detail.shipment || null;
+    } catch (error) {
+      if (/找不到运单/i.test(error.message)) return null;
+      throw error;
+    }
+  }
+
+  function trackingRequest(identifier, field) {
+    return {
+      shipment: {
+        shipment_id: "",
+        client_reference: "",
+        tracking_number: "",
+        parcel_number: "",
+        waybill_number: "",
+        ext_numbers: "",
+        [field]: identifier,
+        language: "zh"
+      }
+    };
+  }
+
   return {
     async findByWaybill(waybillNumber) {
-      const shipmentId = String(waybillNumber || "").trim();
-      if (!shipmentId) return null;
+      const identifier = String(waybillNumber || "").trim();
+      if (!identifier) return null;
 
-      const detail = await request("/shipment/get_info", {
-        shipment: { shipment_id: shipmentId, client_reference: "" }
-      });
-      if (!detail.shipment) return null;
+      // Customers may enter an internal shipment ID or their own reference number.
+      let shipment = await getDetail({ shipment_id: identifier, client_reference: "" });
+      if (!shipment) {
+        shipment = await getDetail({ shipment_id: "", client_reference: identifier });
+      }
 
       let tracking = null;
       try {
-        const trackingData = await request("/shipment/get_tracking", {
-          shipment: {
-            shipment_id: shipmentId,
-            client_reference: "",
-            tracking_number: "",
-            parcel_number: "",
-            waybill_number: "",
-            ext_numbers: "",
-            language: "zh"
-          }
-        });
+        const trackingData = await request(
+          "/shipment/get_tracking",
+          trackingRequest(shipment?.shipment_id || identifier, shipment ? "shipment_id" : "waybill_number")
+        );
         tracking = trackingData.shipment || null;
       } catch {
         // A detail result remains useful when the carrier route is temporarily unavailable.
       }
 
-      return normalizeShipment(detail.shipment, tracking);
+      if (!shipment && tracking?.shipment_id) {
+        shipment = await getDetail({ shipment_id: tracking.shipment_id, client_reference: "" });
+      }
+      if (!shipment) return null;
+
+      return normalizeShipment(shipment, tracking);
     }
   };
 }

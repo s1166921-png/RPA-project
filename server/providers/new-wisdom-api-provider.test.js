@@ -45,6 +45,59 @@ test("returns no result when the documented detail response is empty", async () 
   assert.equal(await provider.findByWaybill("MO-MISSING"), null);
 });
 
+test("falls back from an internal shipment ID to a customer reference", async () => {
+  const calls = [];
+  const provider = createNewWisdomApiProvider({
+    accessToken: "test-token",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, body: JSON.parse(options.body) });
+      const isReferenceLookup = options.body.includes('"client_reference":"CLIENT-42"');
+      const isTracking = url.endsWith("/shipment/get_tracking");
+      return {
+        ok: true,
+        async json() {
+          if (isTracking) return { status: 1, data: { shipment: { traces: [] } } };
+          return isReferenceLookup
+            ? { status: 1, data: { shipment: { shipment_id: "MO10083353", parcels: [] } } }
+            : { status: 1, data: {} };
+        }
+      };
+    }
+  });
+
+  const row = await provider.findByWaybill("CLIENT-42");
+  assert.equal(row.waybill_number, "MO10083353");
+  assert.deepEqual(calls[0].body, { shipment: { shipment_id: "CLIENT-42", client_reference: "" } });
+  assert.deepEqual(calls[1].body, { shipment: { shipment_id: "", client_reference: "CLIENT-42" } });
+  assert.equal(calls[2].body.shipment.shipment_id, "MO10083353");
+});
+
+test("resolves a logistics waybill through tracking before reading details", async () => {
+  const calls = [];
+  const provider = createNewWisdomApiProvider({
+    accessToken: "test-token",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, body: JSON.parse(options.body) });
+      const isTracking = url.endsWith("/shipment/get_tracking");
+      const isResolvedDetail = options.body.includes('"shipment_id":"SHP-8"');
+      return {
+        ok: true,
+        async json() {
+          if (isTracking) return { status: 1, data: { shipment: { shipment_id: "SHP-8", traces: [] } } };
+          return isResolvedDetail
+            ? { status: 1, data: { shipment: { shipment_id: "SHP-8", parcels: [] } } }
+            : { status: 1, data: {} };
+        }
+      };
+    }
+  });
+
+  const row = await provider.findByWaybill("LOGISTICS-9");
+  assert.equal(row.waybill_number, "SHP-8");
+  assert.equal(calls[2].body.shipment.waybill_number, "LOGISTICS-9");
+  assert.equal(calls[3].body.shipment.shipment_id, "SHP-8");
+});
+
 test("requires a dedicated API token", () => {
   assert.throws(() => createNewWisdomApiProvider({}), /access token/);
 });
