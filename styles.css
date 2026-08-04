@@ -40,7 +40,7 @@ body {
   display: none !important;
 }
 
-button, textarea { font: inherit; }
+button, textarea, select { font: inherit; }
 
 button {
   min-height: 40px;
@@ -121,6 +121,15 @@ textarea {
   line-height: 1.5;
 }
 
+.lookup-form select {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 10px;
+}
+
 .input-hint, .empty, .batch-summary, .batch-reason { color: var(--muted); }
 .input-hint { margin: 0; font-size: 13px; }
 .lookup-form button, #downloadBatchExport { justify-self: start; }
@@ -190,6 +199,10 @@ textarea {
 .tracking-nodes { margin: 10px 0 0; padding-left: 20px; color: var(--muted); }
 .tracking-nodes li { padding: 3px 0; }
 .tracking-item small { display: block; margin-top: 10px; color: var(--muted); }
+.cargo-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 12px 0 0; font-size: 14px; }
+.cargo-details dt { color: var(--muted); }
+.cargo-details dd { margin: 0; overflow-wrap: anywhere; }
+.cargo-information-item small { display: block; margin-top: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .billing-item p { margin: 8px 0 0; }
 .billing-item small { display: block; margin-top: 10px; color: var(--muted); overflow-wrap: anywhere; }
 .weight-validation-item p { margin: 8px 0 0; }

@@ -170,7 +170,7 @@ test("serves the customer-safe workflow catalog", async (t) => {
   const response = await get(server, "/api/workflows/definitions");
   assert.equal(response.status, 200);
   assert.deepEqual(response.body.workflows.map((workflow) => workflow.workflowId), [
-    "waybill_lookup", "shipment_tracking", "billing_query", "monthly_billing_query", "billing_weight_confirmation", "weight_validation"
+    "waybill_lookup", "shipment_tracking", "cargo_information", "billing_query", "monthly_billing_query", "billing_weight_confirmation", "weight_validation"
   ]);
 });
 
@@ -522,6 +522,20 @@ test("runs the read-only shipment tracking workflow", async (t) => {
   assert.equal(response.body.workflowId, "shipment_tracking");
   assert.equal(response.body.items[0].currentStatus, "运输中");
   assert.equal(response.body.items[0].routeNodes[0].location, "仓库");
+});
+
+test("runs the read-only cargo information workflow", async (t) => {
+  const server = await start({
+    async findByWaybill(value) {
+      return { shipment_number: value, service: "Air", to_country: "FR", consignee: "Receiver", parcel_count: "2", actual_weight: "3.1", charge_weight: "4.2" };
+    }
+  });
+  t.after(() => server.close());
+  const response = await request(server, { waybillNumbers: ["MO10082215"] }, "/api/workflows/cargo-information");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.workflowId, "cargo_information");
+  assert.equal(response.body.items[0].recipient, "Receiver");
+  assert.equal(response.body.items[0].chargeWeight, "4.2");
 });
 
 test("runs the read-only billing query workflow", async (t) => {

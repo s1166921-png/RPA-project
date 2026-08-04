@@ -20,6 +20,16 @@ const DEFINITIONS = [
     readOnly: true
   },
   {
+    workflowId: "cargo_information",
+    name: "货物信息查询",
+    description: "查询服务、目的国、收件人、件数、重量及来源信息。",
+    requiredInputs: ["waybillNumbers"],
+    dataSources: ["new_wisdom_shipment", "short_cache"],
+    validationRules: ["waybill_required", "tenant_customer_scope"],
+    outputTypes: ["portal_result", "xlsx_export"],
+    readOnly: true
+  },
+  {
     workflowId: "billing_query",
     name: "费用明细查询",
     description: "按运单查询应收金额、币种和费用单价。",

@@ -1,5 +1,6 @@
 const form = document.querySelector("#lookupForm");
 const input = document.querySelector("#waybillNumbers");
+const queryType = document.querySelector("#queryType");
 const result = document.querySelector("#lookupResult");
 const assistantForm = document.querySelector("#assistantForm");
 const assistantMessage = document.querySelector("#assistantMessage");
@@ -494,6 +495,90 @@ function renderBatch(batch) {
   result.append(heading, list, workflow, download);
 }
 
+function renderCargoInformation(payload) {
+  result.innerHTML = "";
+  const heading = document.createElement("div");
+  heading.className = "result-heading";
+  const title = document.createElement("h2");
+  title.textContent = `货物信息查询完成，共 ${payload.items.length} 条`;
+  heading.append(title);
+  const list = document.createElement("div");
+  list.className = "batch-list";
+  payload.items.forEach((entry) => {
+    const item = document.createElement("article");
+    item.className = "batch-item cargo-information-item";
+    const row = document.createElement("div");
+    row.className = "batch-item-main";
+    const number = document.createElement("strong");
+    number.textContent = entry.waybillNumber || "-";
+    const status = document.createElement("span");
+    status.className = `status status-${entry.status}`;
+    status.textContent = displayStatus(entry.status);
+    row.append(number, status);
+    item.append(row);
+    if (entry.status === "found") {
+      const details = document.createElement("dl");
+      details.className = "cargo-details";
+      [["FBA号", entry.fbaNumber], ["服务", entry.service], ["目的国", entry.country], ["收件人", entry.recipient], ["件数", entry.pieces], ["实重", entry.actualWeight], ["材重", entry.volumeWeight], ["收费重", entry.chargeWeight], ["报关方式", entry.customsMode]].forEach(([label, value]) => {
+        const term = document.createElement("dt");
+        term.textContent = label;
+        const definition = document.createElement("dd");
+        definition.textContent = value || "-";
+        details.append(term, definition);
+      });
+      item.append(details);
+      const source = document.createElement("small");
+      source.textContent = `数据来源：${entry.source}；查询时间：${entry.queriedAt}；快照：${entry.sourceSnapshotId || "-"}`;
+      item.append(source);
+    } else {
+      const reason = document.createElement("p");
+      reason.className = "batch-reason";
+      reason.textContent = displayReason(entry.status);
+      item.append(reason);
+    }
+    list.append(item);
+  });
+  result.append(heading, list);
+}
+
+function renderTracking(payload) {
+  result.innerHTML = "";
+  const heading = document.createElement("div");
+  heading.className = "result-heading";
+  const title = document.createElement("h2");
+  title.textContent = `物流轨迹查询完成，共 ${payload.items.length} 条`;
+  heading.append(title);
+  const panel = document.createElement("section");
+  panel.className = "workflow-message tracking-message";
+  payload.items.forEach((entry) => {
+    const card = document.createElement("article");
+    card.className = "workflow-message-item tracking-item";
+    const title = document.createElement("strong");
+    title.textContent = `${entry.waybillNumber || "-"} · ${displayStatus(entry.status)}`;
+    card.append(title);
+    if (entry.status === "found") {
+      const summary = document.createElement("p");
+      summary.textContent = `当前状态：${entry.currentStatus || "-"}；最后轨迹：${entry.lastRoute || "-"}`;
+      card.append(summary);
+      const nodes = document.createElement("ol");
+      nodes.className = "tracking-nodes";
+      (entry.routeNodes || []).forEach((node) => {
+        const nodeItem = document.createElement("li");
+        nodeItem.textContent = [node.time, node.location, node.status].filter(Boolean).join(" · ");
+        nodes.append(nodeItem);
+      });
+      if (nodes.children.length) card.append(nodes);
+    } else {
+      const reason = document.createElement("p");
+      reason.className = "batch-reason";
+      reason.textContent = displayReason(entry.status);
+      card.append(reason);
+    }
+    panel.append(card);
+  });
+  result.append(heading, panel);
+}
+
 async function runBillingWeightWorkflow() {
   try {
     const response = await apiFetch("/api/workflows/billing-weight-confirmation", {
@@ -824,13 +909,22 @@ form.addEventListener("submit", async (event) => {
   currentInput = rawInput;
   setMessage(`正在查询 ${count} 个单号...`);
   try {
-    const response = await apiFetch("/api/shipments/batch-lookup", {
+    const endpoint = queryType?.value === "tracking"
+      ? "/api/workflows/shipment-tracking"
+      : "/api/workflows/cargo-information";
+    const response = await apiFetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ waybillNumbers: [rawInput] })
     });
     const payload = await response.json();
     if (response.status === 401) return showLoginRequired();
+    if (payload.workflowId === "cargo_information") {
+      return renderCargoInformation(payload);
+    }
+    if (payload.workflowId === "shipment_tracking") {
+      return renderTracking(payload);
+    }
     if (payload.status === "completed") {
       currentBatch = payload.results;
       return renderBatch(currentBatch);

@@ -7,6 +7,7 @@ const { buildExportRows, buildBatchExportRows, buildMonthlyBillingExportRows } =
 const { createXlsxExport } = require("./export-workbook");
 const { runBillingWeightWorkflow } = require("./billing-weight-workflow");
 const { runShipmentTrackingWorkflow } = require("./shipment-tracking-workflow");
+const { runCargoInformationWorkflow } = require("./cargo-information-workflow");
 const { runBillingQueryWorkflow } = require("./billing-query-workflow");
 const { parseBillingMonth, runMonthlyBillingWorkflow } = require("./monthly-billing-workflow");
 const { listWorkflowDefinitions } = require("./workflow-definitions");
@@ -382,6 +383,24 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
         recordRun(runStore, user, "shipment_tracking", "completed", startedAt, parsed.waybillNumbers.length);
         const protectedResults = prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "shipment_tracking");
         return sendJson(response, 200, runShipmentTrackingWorkflow(protectedResults));
+      } catch {
+        return sendJson(response, 400, { status: "invalid_input", items: [] });
+      }
+    }
+
+    if (request.method === "POST" && request.url === "/api/workflows/cargo-information") {
+      const startedAt = Date.now();
+      try {
+        const body = await readJson(request);
+        const parsed = parseWaybillNumbers(body.waybillNumbers);
+        const result = await lookupWaybills(body.waybillNumbers, activeProvider);
+        if (result.status !== "completed") {
+          recordRun(runStore, user, "cargo_information", result.status, startedAt, 0);
+          return sendJson(response, 400, result);
+        }
+        recordRun(runStore, user, "cargo_information", "completed", startedAt, parsed.waybillNumbers.length);
+        const protectedResults = prepareWaybillResults(result.results, parsed.waybillNumbers, user, auth, sourceSnapshots, "cargo_information");
+        return sendJson(response, 200, runCargoInformationWorkflow(protectedResults));
       } catch {
         return sendJson(response, 400, { status: "invalid_input", items: [] });
       }

@@ -37,6 +37,11 @@
         <p class="eyebrow">批量运单查询</p>
         <h1 id="pageTitle">输入多个单号，统一查看结果</h1>
         <form id="lookupForm" class="lookup-form">
+          <label for="queryType">查询内容</label>
+          <select id="queryType" name="queryType">
+            <option value="cargo">货物信息</option>
+            <option value="tracking">物流轨迹</option>
+          </select>
           <label for="waybillNumbers">运单号</label>
           <textarea id="waybillNumbers" rows="6" autocomplete="off" placeholder="例如：&#10;MO10067690&#10;MO10068327"></textarea>
           <p id="inputHint" class="input-hint">支持按换行、英文逗号或中文逗号分隔，单次最多 50 个单号。</p>
