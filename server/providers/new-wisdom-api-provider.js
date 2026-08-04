@@ -29,6 +29,23 @@ function normalizeShipment(shipment, tracking) {
   };
 }
 
+function normalizeListQuery(query = {}) {
+  const shipment = {
+    shipment_id: String(query.shipmentId || "").trim(),
+    client_reference: String(query.clientReference || "").trim(),
+    status: String(query.status || "").trim(),
+    start_created: String(query.startCreated || "").trim(),
+    end_created: String(query.endCreated || "").trim(),
+    start_updated: String(query.startUpdated || "").trim(),
+    end_updated: String(query.endUpdated || "").trim(),
+    page: Number.isInteger(query.page) && query.page > 0 ? query.page : 1,
+    page_size: Number.isInteger(query.pageSize) && query.pageSize > 0
+      ? Math.min(query.pageSize, 100)
+      : 30
+  };
+  return { time: Math.floor(Date.now() / 1000), shipment };
+}
+
 function createNewWisdomApiProvider({ accessToken, baseUrl = DEFAULT_BASE_URL, fetchImpl = fetch }) {
   if (!accessToken) throw new Error("New Wisdom API access token is required");
 
@@ -77,6 +94,11 @@ function createNewWisdomApiProvider({ accessToken, baseUrl = DEFAULT_BASE_URL, f
   }
 
   return {
+    async listShipments(query = {}) {
+      const data = await request("/shipment/list", normalizeListQuery(query));
+      return (Array.isArray(data.shipment) ? data.shipment : []).map((shipment) => normalizeShipment(shipment, null));
+    },
+
     async findByWaybill(waybillNumber) {
       const identifier = String(waybillNumber || "").trim();
       if (!identifier) return null;
@@ -108,4 +130,4 @@ function createNewWisdomApiProvider({ accessToken, baseUrl = DEFAULT_BASE_URL, f
   };
 }
 
-module.exports = { createNewWisdomApiProvider, normalizeShipment, toRouteNodes };
+module.exports = { createNewWisdomApiProvider, normalizeShipment, normalizeListQuery, toRouteNodes };

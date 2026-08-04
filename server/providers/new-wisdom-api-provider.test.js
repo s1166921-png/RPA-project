@@ -1,7 +1,60 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { createNewWisdomApiProvider } = require("./new-wisdom-api-provider");
+const { createNewWisdomApiProvider, normalizeListQuery } = require("./new-wisdom-api-provider");
+
+test("builds the documented shipment-list filters and caps a page at 100", () => {
+  const request = normalizeListQuery({
+    shipmentId: "MO10083353,MO10083354",
+    startCreated: "2026-08-01 00:00:00",
+    endCreated: "2026-08-01 23:59:59",
+    startUpdated: "2026-08-01 00:00:00",
+    endUpdated: "2026-08-01 23:59:59",
+    page: 2,
+    pageSize: 150
+  });
+
+  assert.equal(typeof request.time, "number");
+  assert.deepEqual(request.shipment, {
+    shipment_id: "MO10083353,MO10083354",
+    client_reference: "",
+    status: "",
+    start_created: "2026-08-01 00:00:00",
+    end_created: "2026-08-01 23:59:59",
+    start_updated: "2026-08-01 00:00:00",
+    end_updated: "2026-08-01 23:59:59",
+    page: 2,
+    page_size: 100
+  });
+});
+
+test("lists shipments by documented created and updated time filters", async () => {
+  const calls = [];
+  const provider = createNewWisdomApiProvider({
+    accessToken: "test-token",
+    baseUrl: "https://api.example.test/api/v5",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, body: JSON.parse(options.body) });
+      return {
+        ok: true,
+        async json() {
+          return { status: 1, data: { shipment: [{
+            shipment_id: "MO10083353", service_code: "EU", status: "picked", parcel_count: 1,
+            to_address: { country: "FR", name: "Receiver" }, parcels: [{ client_weight: "3.2" }]
+          }] } };
+        }
+      };
+    }
+  });
+
+  const rows = await provider.listShipments({ startCreated: "2026-08-01 00:00:00", endCreated: "2026-08-01 23:59:59", pageSize: 100 });
+  assert.equal(calls[0].url, "https://api.example.test/api/v5/shipment/list");
+  assert.equal(calls[0].body.shipment.start_created, "2026-08-01 00:00:00");
+  assert.equal(calls[0].body.shipment.end_created, "2026-08-01 23:59:59");
+  assert.equal(calls[0].body.shipment.page_size, 100);
+  assert.equal(rows[0].waybill_number, "MO10083353");
+  assert.equal(rows[0].country, "FR");
+});
 
 test("uses the documented v5 detail and tracking endpoints with a Bearer token", async () => {
   const calls = [];
