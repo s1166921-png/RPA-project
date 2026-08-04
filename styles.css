@@ -31,6 +31,10 @@ body {
   display: none !important;
 }
 
+.simple-query-mode.auth-required .login-panel {
+  display: block !important;
+}
+
 .simple-query-mode #billingWeightWorkflow,
 .simple-query-mode #downloadBatchExport {
   display: none !important;

@@ -61,10 +61,10 @@ async function loadCurrentUser() {
 }
 
 async function initializeAuth(force = false) {
-  if (simpleQueryMode && !force) return;
   try {
     const response = await fetch("/api/auth/config");
     const config = await response.json();
+    if (config.internalQueryAuthRequired) document.body.classList.add("auth-required");
     if (!config.enabled || !loginPanel) return;
     loginPanel.hidden = false;
     if (authToken) {

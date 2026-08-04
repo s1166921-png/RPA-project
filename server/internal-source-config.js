@@ -5,12 +5,19 @@ function resolveInternalSourceConfig(env = {}) {
   }
   if (mode === "central-api") {
     const accessToken = String(env.CENTRAL_NEW_WISDOM_API_TOKEN || env.NEXTSLS_API_TOKEN || "").trim();
+    const authenticationRequired = env.AUTH_REQUIRED === "true";
+    const allowUnauthenticatedDemo = env.ALLOW_UNAUTHENTICATED_INTERNAL_QUERY === "true";
+    const enabled = Boolean(accessToken) && (authenticationRequired || allowUnauthenticatedDemo);
     return {
       mode,
-      enabled: Boolean(accessToken),
-      accessToken,
+      enabled,
+      accessToken: enabled ? accessToken : "",
       label: "新智慧公司级 API",
-      reason: accessToken ? "ready" : "CENTRAL_NEW_WISDOM_API_TOKEN is not configured"
+      reason: !accessToken
+        ? "CENTRAL_NEW_WISDOM_API_TOKEN is not configured"
+        : authenticationRequired || allowUnauthenticatedDemo
+        ? "ready"
+        : "AUTH_REQUIRED=true is required for the company API"
     };
   }
   if (mode === "rpa") {

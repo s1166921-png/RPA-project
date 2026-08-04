@@ -66,7 +66,9 @@ function createAuthService({ secret, users = [], userStore = null, ttlMs = 3_600
   }
 
   function canAccess(user, shipment) {
-    return Boolean(user && shipment && shipment.customerCode && user.allowedCustomerCodes.includes(shipment.customerCode));
+    if (!user || !shipment) return false;
+    if (user.role === "admin") return true;
+    return Boolean(shipment.customerCode && user.allowedCustomerCodes.includes(shipment.customerCode));
   }
 
   function isAdmin(user) {

@@ -151,6 +151,19 @@ test("uses the logged-in tenant's provider rather than a shared provider", async
   assert.deepEqual(calls, ["tenant-a"]);
 });
 
+test("allows an internal administrator to view an authorized company-source result", async (t) => {
+  const auth = createAuthService({
+    secret: "test-secret",
+    users: [{ username: "ops", passwordHash: hashPassword("ops-password"), tenantId: "internal", role: "admin", allowedCustomerCodes: [] }]
+  });
+  const server = await start({ async findByWaybill(waybillNumber) { return { waybill_number: waybillNumber, customer_code: "CUST-ANY" }; } }, { auth, requireAuth: true });
+  t.after(() => server.close());
+  const login = auth.login("ops", "ops-password");
+  const response = await request(server, { waybillNumber: "MO-INTERNAL" }, "/api/shipments/lookup", { authorization: `Bearer ${login.token}` });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, "found");
+});
+
 test("serves the customer-safe workflow catalog", async (t) => {
   const server = await start({ async findByWaybill() { return null; } });
   t.after(() => server.close());
