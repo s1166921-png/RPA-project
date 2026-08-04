@@ -130,6 +130,15 @@ test("reports the internal query source without exposing a credential", async (t
   });
 });
 
+test("does not request a login screen for an explicitly local unauthenticated source", async (t) => {
+  const server = await start({ async findByWaybill() { return null; } }, {
+    sourceReadiness: { query: { mode: "central-api", enabled: true, label: "Company API", reason: "ready" } }
+  });
+  t.after(() => server.close());
+  const response = await get(server, "/api/auth/config");
+  assert.deepEqual(response.body, { enabled: false, internalQueryAuthRequired: false });
+});
+
 test("uses the logged-in tenant's provider rather than a shared provider", async (t) => {
   const calls = [];
   const router = {

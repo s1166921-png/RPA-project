@@ -191,7 +191,10 @@ function createServer({ provider, invoiceProvider = null, staticRoot, auth = nul
     }
 
     if (request.method === "GET" && request.url === "/api/auth/config") {
-      return sendJson(response, 200, { enabled: requireAuth, internalQueryAuthRequired: sourceReadiness?.query?.mode === "central-api" });
+      return sendJson(response, 200, {
+        enabled: requireAuth,
+        internalQueryAuthRequired: requireAuth && sourceReadiness?.query?.mode === "central-api"
+      });
     }
 
     if (request.method === "GET" && request.url === "/api/query-source") {
